@@ -6,6 +6,11 @@ import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
+// Use one canonical host everywhere (set NEXT_PUBLIC_SITE_URL in env)
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  (typeof window !== 'undefined' ? window.location.origin : '');
+
 type Form = { name: string; email: string; password: string };
 type OAuthProvider = 'google' | 'azure';
 
@@ -39,15 +44,13 @@ export default function SignupPage() {
     setOk(null);
 
     try {
-      // 🔸 Redirects to callback (so after email verify → Create Company)
-      const emailRedirectTo = `${window.location.origin}/auth/callback`;
-
       const { error } = await supabase.auth.signUp({
         email: form.email.trim(),
         password: form.password,
         options: {
           data: { full_name: form.name.trim() },
-          emailRedirectTo,
+          // ✅ always send them back to our callback (host from SITE_URL)
+          emailRedirectTo: `${SITE_URL}/auth/callback`,
         },
       });
 
@@ -70,7 +73,8 @@ export default function SignupPage() {
       await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`, // ✅ unified callback
+          // ✅ unified callback via SITE_URL
+          redirectTo: `${SITE_URL}/auth/callback`,
           queryParams:
             provider === 'google'
               ? { access_type: 'offline', prompt: 'consent' }
@@ -93,6 +97,7 @@ export default function SignupPage() {
         transition={{ duration: 0.4, ease: 'easeOut' }}
         className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white shadow-[0_8px_40px_-16px_rgba(0,0,0,0.25)] p-8"
       >
+        {/* Brand */}
         <div className="flex items-center justify-center select-none">
           <span className="font-extrabold tracking-tight text-2xl sm:text-3xl">
             Auto
