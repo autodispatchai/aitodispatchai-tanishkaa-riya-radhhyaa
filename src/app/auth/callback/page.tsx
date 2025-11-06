@@ -23,20 +23,23 @@ function CallbackInner() {
         return;
       }
 
+      // Try exchanging code for session (OAuth, signup, invite)
       const { error } = await supabase.auth.exchangeCodeForSession(code);
+
       if (error) {
-        console.error('Exchange error:', error);
+        console.error('Exchange error:', error.message);
+
+        // fallback: redirect login if invite code expired or invalid
         router.replace('/login?error=callback');
         return;
       }
 
-      let next = '/onboarding/create-company';
-      if (type === 'invite') next += '?from=invite';
-      else if (type === 'signup') next += '?from=verify';
-      else if (type === 'oauth') next += '?from=oauth';
-      else if (type === 'recovery') next = '/auth/reset-password';
-
-      router.replace(next);
+      // ✅ unified redirect after success
+      if (type === 'recovery') {
+        router.replace('/auth/reset-password');
+      } else {
+        router.replace('/onboarding/create-company');
+      }
     })();
   }, [params, router]);
 
