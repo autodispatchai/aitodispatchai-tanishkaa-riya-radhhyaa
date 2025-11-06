@@ -7,9 +7,6 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
 type Form = { name: string; email: string; password: string };
-
-// If you enabled Microsoft/Azure in Supabase → provider id is "azure".
-// Make sure it's enabled in Supabase: Authentication → Providers → Azure.
 type OAuthProvider = 'google' | 'azure';
 
 export default function SignupPage() {
@@ -31,6 +28,7 @@ export default function SignupPage() {
   const onChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((p) => ({ ...p, [e.target.name]: e.target.value }));
 
+  // 🔹 Email + Password Signup
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (loading) return;
@@ -41,21 +39,19 @@ export default function SignupPage() {
     setOk(null);
 
     try {
-      // If email confirmations are ON in Supabase, user must verify first.
-      // After clicking the link, they'll be redirected back to `next=...`
-      const emailRedirectTo = `${window.location.origin}/onboarding/create-company`;
+      // 🔸 Redirects to callback (so after email verify → Create Company)
+      const emailRedirectTo = `${window.location.origin}/auth/callback`;
 
       const { error } = await supabase.auth.signUp({
         email: form.email.trim(),
         password: form.password,
         options: {
           data: { full_name: form.name.trim() },
-          emailRedirectTo, // respected when "Confirm email" is ON
+          emailRedirectTo,
         },
       });
 
       if (error) throw error;
-
       setOk('Account created! Check your inbox to verify your email.');
       setForm({ name: '', email: '', password: '' });
     } catch (e: any) {
@@ -65,6 +61,7 @@ export default function SignupPage() {
     }
   };
 
+  // 🔹 Gmail & Outlook signup (OAuth)
   const handleOAuth = async (provider: OAuthProvider) => {
     if (loading) return;
     try {
@@ -73,13 +70,14 @@ export default function SignupPage() {
       await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${window.location.origin}/onboarding/create-company`,
-          queryParams: provider === 'google'
-            ? { access_type: 'offline', prompt: 'consent' }
-            : undefined,
+          redirectTo: `${window.location.origin}/auth/callback`, // ✅ unified callback
+          queryParams:
+            provider === 'google'
+              ? { access_type: 'offline', prompt: 'consent' }
+              : undefined,
         },
       });
-      // Supabase redirects; no further action here.
+      // Supabase handles redirect automatically
     } catch (e: any) {
       setErr(e?.message ?? 'OAuth sign-in failed.');
       setLoading(false);
@@ -95,7 +93,6 @@ export default function SignupPage() {
         transition={{ duration: 0.4, ease: 'easeOut' }}
         className="w-full max-w-md rounded-2xl border border-neutral-200 bg-white shadow-[0_8px_40px_-16px_rgba(0,0,0,0.25)] p-8"
       >
-        {/* Brand */}
         <div className="flex items-center justify-center select-none">
           <span className="font-extrabold tracking-tight text-2xl sm:text-3xl">
             Auto
@@ -105,7 +102,9 @@ export default function SignupPage() {
             AI
           </span>
         </div>
-        <p className="mt-2 text-center text-sm text-neutral-500">Create your account to get started</p>
+        <p className="mt-2 text-center text-sm text-neutral-500">
+          Create your account to get started
+        </p>
 
         {/* OAuth */}
         <div className="mt-6 grid gap-3">
@@ -115,7 +114,6 @@ export default function SignupPage() {
             disabled={loading}
             className="h-11 rounded-xl border border-neutral-300 bg-white hover:bg-neutral-50 transition shadow-sm flex items-center justify-center gap-2 disabled:opacity-60"
           >
-            {/* Make sure these icons exist in /public; else remove the <img> lines */}
             <img src="/google-icon.svg" alt="Google" className="w-5 h-5" />
             Continue with Google
           </button>
@@ -125,7 +123,7 @@ export default function SignupPage() {
             onClick={() => handleOAuth('azure')}
             disabled={loading}
             className="h-11 rounded-xl border border-neutral-300 bg-white hover:bg-neutral-50 transition shadow-sm flex items-center justify-center gap-2 disabled:opacity-60"
-            title="Microsoft (Azure AD)"
+            title="Microsoft (Outlook)"
           >
             <img src="/microsoft-icon.svg" alt="Microsoft" className="w-5 h-5" />
             Continue with Outlook
@@ -145,7 +143,9 @@ export default function SignupPage() {
         {/* Email form */}
         <form onSubmit={onSubmit} className="mt-6 grid gap-5" autoComplete="off">
           <div className="grid gap-2">
-            <label htmlFor="name" className="text-sm text-neutral-700">Full Name</label>
+            <label htmlFor="name" className="text-sm text-neutral-700">
+              Full Name
+            </label>
             <input
               id="name"
               name="name"
@@ -159,7 +159,9 @@ export default function SignupPage() {
           </div>
 
           <div className="grid gap-2">
-            <label htmlFor="email" className="text-sm text-neutral-700">Email</label>
+            <label htmlFor="email" className="text-sm text-neutral-700">
+              Email
+            </label>
             <input
               id="email"
               name="email"
@@ -174,7 +176,9 @@ export default function SignupPage() {
           </div>
 
           <div className="grid gap-2">
-            <label htmlFor="password" className="text-sm text-neutral-700">Password</label>
+            <label htmlFor="password" className="text-sm text-neutral-700">
+              Password
+            </label>
             <div className="relative">
               <input
                 id="password"
@@ -196,7 +200,9 @@ export default function SignupPage() {
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
-            <p className="text-xs text-neutral-500">8+ characters recommended. You’ll verify your email next.</p>
+            <p className="text-xs text-neutral-500">
+              8+ characters recommended. You’ll verify your email next.
+            </p>
           </div>
 
           {/* Alerts */}
