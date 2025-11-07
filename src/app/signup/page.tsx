@@ -6,7 +6,7 @@ import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
-// Use one canonical host everywhere (set NEXT_PUBLIC_SITE_URL in env)
+// ✅ Canonical site URL (set NEXT_PUBLIC_SITE_URL in env to https://www.autodispatchai.com)
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ||
   (typeof window !== 'undefined' ? window.location.origin : '');
@@ -49,7 +49,7 @@ export default function SignupPage() {
         password: form.password,
         options: {
           data: { full_name: form.name.trim() },
-          // ✅ always send them back to our callback (host from SITE_URL)
+          // ✅ verify link -> /auth/callback on SAME host (www)
           emailRedirectTo: `${SITE_URL}/auth/callback`,
         },
       });
@@ -73,7 +73,7 @@ export default function SignupPage() {
       await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          // ✅ unified callback via SITE_URL
+          // ✅ start & finish BOTH on https://www.autodispatchai.com/auth/callback
           redirectTo: `${SITE_URL}/auth/callback`,
           queryParams:
             provider === 'google'
@@ -81,7 +81,7 @@ export default function SignupPage() {
               : undefined,
         },
       });
-      // Supabase handles redirect automatically
+      // Supabase handles the redirect
     } catch (e: any) {
       setErr(e?.message ?? 'OAuth sign-in failed.');
       setLoading(false);
