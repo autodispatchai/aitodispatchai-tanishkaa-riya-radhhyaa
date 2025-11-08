@@ -1,26 +1,25 @@
 // File: src/app/auth/callback/route.ts
 
-import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
-  const requestUrl = new URL(request.url);
-  const code = requestUrl.searchParams.get('code');
+  const url = new URL(request.url);
+  const code = url.searchParams.get('code');
+  const origin = url.origin;
 
-  // Je code hi nahi, user nu login te pa de
+  // Je code hi nahi, seedha login te bhej do
   if (!code) {
-    return NextResponse.redirect(
-      new URL('/login', requestUrl.origin)
-    );
+    return NextResponse.redirect(`${origin}/login`);
   }
 
-  // Next.js da cookie store (Next 14/15 compatible)
+  // ✅ Next.js cookies helper (Next 15 style - async)
   const cookieStore = await cookies();
 
-  // Supabase server client with proper cookie methods
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -33,30 +32,24 @@ export async function GET(request: NextRequest) {
           cookieStore.set({ name, value, ...options });
         },
         remove(name: string, options: CookieOptions) {
-          // maxAge 0 = delete
           cookieStore.set({
             name,
             value: '',
             ...options,
-            maxAge: 0,
+            maxAge: 0, // delete
           });
         },
       },
     }
   );
 
-  // Supabase nu bolo: eh code use karke session bna
   const { error } = await supabase.auth.exchangeCodeForSession(code);
 
   if (error) {
     console.error('Supabase exchange code error:', error.message);
-    return NextResponse.redirect(
-      new URL('/login?error=auth_failed', requestUrl.origin)
-    );
+    return NextResponse.redirect(`${origin}/login?error=auth_failed`);
   }
 
-  // Sab theek → sidha Create Company onboarding te
-  return NextResponse.redirect(
-    new URL('/onboarding/create-company', requestUrl.origin)
-  );
+  // ✅ Code sahi → session set → seedha Create Company wal
+  return NextResponse.redirect(`${origin}/onboarding/create-company`);
 }
