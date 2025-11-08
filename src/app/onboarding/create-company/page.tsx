@@ -9,14 +9,14 @@ type Country = 'Canada' | 'USA';
 export default function CreateCompanyProfile() {
   const router = useRouter();
 
-  // Form state (no defaults)
+  // Form state
   const [country, setCountry] = useState<Country>('Canada');
   const [companyName, setCompanyName] = useState('');
   const [legalName, setLegalName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [mcNumber, setMcNumber] = useState('');
-  const [regId, setRegId] = useState(''); // DOT (USA) or CVOR (Canada)
+  const [regId, setRegId] = useState(''); // DOT or CVOR
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [stateProv, setStateProv] = useState('');
@@ -35,28 +35,26 @@ export default function CreateCompanyProfile() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
+    setOk(false);
 
-    // Minimal client validation
+    // Validation
     if (!agreeTos) return setErr('Please agree to the Terms & Privacy Policy.');
     if (!companyName.trim()) return setErr('Company name is required.');
     if (!email.trim()) return setErr('Business email is required.');
     if (!address.trim() || !city.trim() || !stateProv.trim() || !postal.trim())
-      return setErr('Address, City, State/Province, and Postal/ZIP are required.');
+      return setErr('Full address is required.');
     if (!/^\S+@\S+\.\S+$/.test(email)) return setErr('Enter a valid email.');
 
     try {
       setLoading(true);
 
-      // Map regulatory ID to DB columns:
-      // - USA: DOT in dot_number
-      // - Canada: CVOR stored in dot_number (for now; you can add dedicated column later)
       const body = {
         company_name: companyName.trim(),
-        legal_name: legalName.trim() || undefined,
+        legal_name: legalName.trim() || null,
         email: email.trim(),
-        phone: phone.trim() || undefined,
-        mc_number: mcNumber.trim() || undefined,
-        dot_number: regId.trim() || undefined,
+        phone: phone.trim() || null,
+        mc_number: mcNumber.trim() || null,
+        dot_number: regId.trim() || null,
         address: address.trim(),
         city: city.trim(),
         state: stateProv.trim(),
@@ -66,23 +64,25 @@ export default function CreateCompanyProfile() {
 
       const res = await fetch('/api/companies', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
 
-      const ct = res.headers.get('content-type') || '';
-      const payload = ct.includes('application/json') ? await res.json() : null;
+      const data = await res.json();
 
       if (!res.ok) {
-        const msg = payload?.error || `Failed to save company (HTTP ${res.status})`;
-        throw new Error(msg);
+        throw new Error(data.error || `HTTP ${res.status}`);
       }
 
       setOk(true);
-      // Go next (you can change to /billing/choose-plan later)
-      setTimeout(() => router.push('/'), 700);
+
+      // SUCCESS → Redirect to Billing
+      setTimeout(() => {
+        router.push('/billing/choose-plan');
+      }, 800);
+
     } catch (e: any) {
-      setErr(e?.message || 'Something went wrong. Please try again.');
+      setErr(e?.message || 'Failed to save. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -90,11 +90,11 @@ export default function CreateCompanyProfile() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* brand accent bar */}
+      {/* Gradient Top Bar */}
       <div className="h-[3px] w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500" />
 
       <main className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-10">
-        {/* header */}
+        {/* Header */}
         <div className="text-center">
           <h1 className="text-3xl font-bold tracking-tight text-neutral-900">
             Create a Company Profile
@@ -104,13 +104,13 @@ export default function CreateCompanyProfile() {
           </p>
         </div>
 
-        {/* card */}
-        <div className="mt-8 rounded-2xl border border-neutral-200 bg-white shadow-sm">
-          <div className="h-1 rounded-t-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500" />
+        {/* Form Card */}
+        <div className="mt-8 rounded-2xl border border-neutral-200 bg-white shadow-sm overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500" />
 
           <form onSubmit={onSubmit} className="p-6 sm:p-8 space-y-6" autoComplete="off">
-            {/* Country + Regulatory ID */}
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            {/* Country + Reg ID */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-neutral-800">
                   Operating Country
@@ -120,8 +120,8 @@ export default function CreateCompanyProfile() {
                   onChange={(e) => setCountry(e.target.value as Country)}
                   className="h-11 w-full rounded-xl border border-neutral-300 bg-white px-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-purple-500/20"
                 >
-                  <option value="Canada">🇨🇦 Canada</option>
-                  <option value="USA">🇺🇸 United States</option>
+                  <option value="Canada">Canada</option>
+                  <option value="USA">United States</option>
                 </select>
               </div>
 
@@ -141,8 +141,8 @@ export default function CreateCompanyProfile() {
               </div>
             </div>
 
-            {/* Company names */}
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            {/* Company Names */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-neutral-800">
                   Legal Company Name <span className="text-red-600">*</span>
@@ -168,7 +168,7 @@ export default function CreateCompanyProfile() {
               </div>
             </div>
 
-            {/* Address lines */}
+            {/* Address */}
             <div>
               <label className="mb-1.5 block text-sm font-medium text-neutral-800">
                 Business Address <span className="text-red-600">*</span>
@@ -182,7 +182,7 @@ export default function CreateCompanyProfile() {
               />
             </div>
 
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
               <div className="md:col-span-2">
                 <label className="mb-1.5 block text-sm font-medium text-neutral-800">
                   City <span className="text-red-600">*</span>
@@ -221,8 +221,8 @@ export default function CreateCompanyProfile() {
               </div>
             </div>
 
-            {/* Contact & IDs */}
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+            {/* Contact */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               <div className="md:col-span-2">
                 <label className="mb-1.5 block text-sm font-medium text-neutral-800">
                   Business Email <span className="text-red-600">*</span>
@@ -250,7 +250,8 @@ export default function CreateCompanyProfile() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            {/* MC + Reg ID */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-neutral-800">
                   MC Number (optional, USA)
@@ -275,22 +276,22 @@ export default function CreateCompanyProfile() {
               </div>
             </div>
 
-            {/* Preferences */}
-            <div className="space-y-2">
+            {/* Terms */}
+            <div className="space-y-3">
               <label className="flex items-start gap-3 text-sm">
                 <input
                   type="checkbox"
                   checked={agreeTos}
                   onChange={(e) => setAgreeTos(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-neutral-300"
+                  className="mt-0.5 h-4 w-4 rounded border-neutral-300 text-purple-600 focus:ring-purple-500"
                 />
                 <span className="text-neutral-700">
                   I agree to the{' '}
-                  <a className="underline" href="/terms" target="_blank" rel="noreferrer">
+                  <a href="/terms" target="_blank" className="underline text-purple-600">
                     Terms & Conditions
                   </a>{' '}
                   and{' '}
-                  <a className="underline" href="/privacy" target="_blank" rel="noreferrer">
+                  <a href="/privacy" target="_blank" className="underline text-purple-600">
                     Privacy Policy
                   </a>
                   .
@@ -301,7 +302,7 @@ export default function CreateCompanyProfile() {
                   type="checkbox"
                   checked={optIn}
                   onChange={(e) => setOptIn(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-neutral-300"
+                  className="mt-0.5 h-4 w-4 rounded border-neutral-300 text-purple-600 focus:ring-purple-500"
                 />
                 <span className="text-neutral-700">
                   I’d like to receive product updates and onboarding emails. (Optional)
@@ -313,34 +314,44 @@ export default function CreateCompanyProfile() {
             <AnimatePresence>
               {err && (
                 <motion.div
-                  initial={{ opacity: 0, y: -6 }}
+                  initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+                  exit={{ opacity: 0, y: -10 }}
+                  className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
                 >
                   {err}
                 </motion.div>
               )}
               {ok && (
                 <motion.div
-                  initial={{ opacity: 0, y: -6 }}
+                  initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
+                  exit={{ opacity: 0, y: -10 }}
+                  className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700"
                 >
-                  Company created successfully!
+                  Company created successfully! Redirecting to plan selection...
                 </motion.div>
               )}
             </AnimatePresence>
 
-            {/* Actions */}
-            <div className="pt-2">
+            {/* Submit Button */}
+            <div className="pt-4">
               <button
                 type="submit"
-                disabled={loading}
-                className="inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500 px-6 py-3 font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-60"
+                disabled={loading || !agreeTos}
+                className="w-full h-12 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500 px-6 font-semibold text-white shadow-md hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed transition flex items-center justify-center gap-2"
               >
-                {loading ? 'Submitting…' : 'Continue'}
+                {loading ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Saving...
+                  </>
+                ) : (
+                  'Continue'
+                )}
               </button>
             </div>
           </form>
