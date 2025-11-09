@@ -1,8 +1,7 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { createClient } from '@/lib/supabase';
 
 type BillingCycle = 'monthly' | 'yearly';
 type PlanName = 'ESSENTIALS' | 'PRO' | 'ENTERPRISE';
@@ -74,7 +73,7 @@ const ADD_ONS: AddOn[] = [
   { id: 'highway',    title: 'Highway Chess Master',   desc: 'Triangle Load Hunter, HOS-aware scheduling, swap suggestions.', monthly: 20 },
   { id: 'bestfinder', title: 'Best Load Finder',       desc: 'Pins the most profitable loads across boards automatically.', monthly: 15 },
   { id: 'safety',     title: 'AI Safety Supervisor',   desc: 'Alerts for overspeeding or harsh braking.', monthly: 10 },
-  { id: 'cb',         title: 'Cross-Border Compliance',desc: 'Files ACE/ACI e-Manifests automatically.', monthly: 20 },
+  { id: 'cb',         title: 'Cross-Border Compliance', desc: 'Files ACE/ACI e-Manifests automatically.', monthly: 20 },
   { id: 'voice',      title: '24/7 Voice & SMS Assistant', desc: 'AI assistant that talks to brokers & drivers.', monthly: 10 },
   { id: 'agent',      title: 'Personalized AI Agent',  desc: 'Builds relationships with your top brokers.', monthly: 15 },
   { id: 'pay',        title: 'Automated Invoicing & Payroll', desc: 'CLERK agent for invoicing + payroll-ready reports.', monthly: 15 },
@@ -93,39 +92,6 @@ export default function ChoosePlanPage() {
   const [selectedAddOns, setSelectedAddOns] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [companyEmail, setCompanyEmail] = useState('');
-  const [fetching, setFetching] = useState(true);
-
-  // FETCH COMPANY EMAIL
-  useEffect(() => {
-    async function fetchCompanyEmail() {
-      const supabase = createClient();
-      const { data: { session: authSession }, error: sessionError } = await supabase.auth.getSession();
-
-      if (!authSession || sessionError) {
-        window.location.href = '/login';
-        return;
-      }
-
-      const user = authSession.user;
-
-      const { data: company, error: companyError } = await supabase
-        .from('companies')
-        .select('email')
-        .eq('owner_id', user.id)
-        .single();
-
-      if (companyError || !company?.email) {
-        alert('Please create your company first!');
-        window.location.href = '/onboarding';
-        return;
-      }
-
-      setCompanyEmail(company.email);
-      setFetching(false);
-    }
-    fetchCompanyEmail();
-  }, []);
 
   const plan = useMemo(() => PLANS.find(p => p.name === selectedPlan)!, [selectedPlan]);
   const isEnterprise = plan.monthly == null;
@@ -148,19 +114,13 @@ export default function ChoosePlanPage() {
   const grandTotal = useMemo(() => {
     if (plan.monthly == null) return 0;
     return planPrice + addOnsTotal;
-  }, [planPrice, addOnsTotal, plan.monthly]);
+  }, [planPrice, addOnsTotal]);
 
   function toggleAddOn(id: string) {
     setSelectedAddOns(prev => ({ ...prev, [id]: !prev[id] }));
   }
 
   async function checkout() {
-    if (fetching) return;
-    if (!companyEmail) {
-      alert('Company email not loaded');
-      return;
-    }
-
     try {
       setErr(null);
       setLoading(true);
@@ -177,30 +137,29 @@ export default function ChoosePlanPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           plan: plan.name,
-          billing,
+          billing: billing,           // ← YE ZAROORI THA!
           addOns: chosenAddOnIds,
-          email: companyEmail,
         }),
       });
 
       const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || 'Checkout failed');
-      if (!json?.url) throw new Error('No checkout URL');
+
+      if (!res.ok) {
+        throw new Error(json?.error || 'Checkout failed');
+      }
+
+      if (!json?.url) {
+        throw new Error('No checkout URL received');
+      }
 
       window.location.href = json.url;
+
     } catch (e: any) {
-      setErr(e?.message || 'Checkout error');
+      console.error('Checkout error:', e);
+      setErr(e?.message || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
-  }
-
-  if (fetching) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-lg">Loading your company...</p>
-      </div>
-    );
   }
 
   return (
@@ -249,10 +208,14 @@ export default function ChoosePlanPage() {
             )}
           </div>
 
+          {/* ERROR MESSAGE */}
           {err && (
-            <div className="mx-auto mb-4 max-w-lg rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{err}</div>
+            <div className="mx-auto mb-6 max-w-2xl rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 text-center font-medium">
+              ERROR: {err}
+            </div>
           )}
 
+          {/* PLANS GRID */}
           <div className="grid md:grid-cols-3 gap-6">
             {PLANS.map((p, idx) => {
               const active = p.name === selectedPlan;
@@ -309,6 +272,7 @@ export default function ChoosePlanPage() {
             })}
           </div>
 
+          {/* ADD-ONS */}
           <div className="mt-12">
             <h2 className="text-2xl font-bold">Build Your Own Add-Ons</h2>
             <p className="text-sm text-neutral-500 mt-1">
@@ -350,6 +314,7 @@ export default function ChoosePlanPage() {
           </div>
         </section>
 
+        {/* SUMMARY + BUTTONS */}
         <aside className="sticky top-6 h-fit border rounded-2xl p-6 shadow-sm">
           <h3 className="text-lg font-semibold">Summary</h3>
           <p className="text-sm text-neutral-500">Per truck • {isEnterprise ? 'Custom' : (billing === 'yearly' ? 'Yearly' : 'Monthly')} billing</p>
@@ -377,16 +342,26 @@ export default function ChoosePlanPage() {
             </div>
           </div>
 
-          <button
-            onClick={checkout}
-            disabled={loading || fetching}
-            className="mt-5 h-11 w-full rounded-xl font-semibold tracking-tight bg-neutral-900 text-white hover:bg-neutral-800 disabled:opacity-60"
-          >
-            {plan.name === 'ENTERPRISE' ? 'Contact Sales' : (loading ? 'Processing…' : `Continue with ${plan.name}`)}
-          </button>
+          <div className="mt-5 space-y-3">
+            <button
+              onClick={checkout}
+              disabled={loading}
+              className="w-full h-11 rounded-xl font-semibold bg-green-600 text-white hover:bg-green-700 disabled:opacity-60 transition"
+            >
+              {loading ? 'Processing…' : 'Start 14-Day Free Trial'}
+            </button>
 
-          <p className="text-xs text-neutral-500 mt-3">Change add-ons anytime from Billing. Taxes may apply.</p>
-          <p className="text-xs text-neutral-500 mt-1">Billing email: <strong>{companyEmail}</strong></p>
+            <button
+              onClick={() => {}}
+              className="w-full h-11 rounded-xl font-semibold border border-gray-300 text-gray-700 hover:bg-gray-50 transition"
+            >
+              Just View Pricing
+            </button>
+          </div>
+
+          <p className="text-xs text-neutral-500 mt-4 text-center">
+            Card required to start trial • Auto-charged after 14 days • Cancel anytime
+          </p>
         </aside>
       </main>
     </div>

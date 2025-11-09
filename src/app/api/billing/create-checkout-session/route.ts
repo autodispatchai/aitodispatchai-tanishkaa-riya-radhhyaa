@@ -6,22 +6,9 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const BILLING_ENABLED = process.env.BILLING_ENABLED !== 'false';
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 
-const BASE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ||
-  process.env.BASE_URL ||
-  'http://localhost:3000';
-
-if (!STRIPE_SECRET_KEY) {
-  console.error('[checkout] Missing STRIPE_SECRET_KEY');
-}
-
-const stripe = STRIPE_SECRET_KEY
-  ? new Stripe(STRIPE_SECRET_KEY)
-  : (null as unknown as Stripe);
-
-// Plan price IDs (from .env)
+// PRICE IDS (MUST BE IN .env!)
 const PRICE = {
   ESSENTIALS: {
     monthly: process.env.PRICE_ESSENTIALS_MONTHLY,
@@ -33,7 +20,6 @@ const PRICE = {
   },
 } as const;
 
-// Add-on price IDs (from .env)
 const ADDON = {
   city:       { monthly: process.env.PRICE_ADDON_CITY_MONTHLY,       yearly: process.env.PRICE_ADDON_CITY_YEARLY },
   highway:    { monthly: process.env.PRICE_ADDON_HIGHWAY_MONTHLY,    yearly: process.env.PRICE_ADDON_HIGHWAY_YEARLY },
@@ -54,82 +40,73 @@ type Body = {
   plan: Plan;
   billing: Billing;
   addOns?: AddOn[];
-  email?: string; // optional, from company/user
+  email?: string;
 };
 
-export async function GET() {
-  return NextResponse.json({ ok: true, note: 'create-checkout-session alive' });
+if (!STRIPE_SECRET_KEY) {
+  console.error('[create-checkout-session] STRIPE_SECRET_KEY MISSING!');
 }
+
+const stripe = STRIPE_SECRET_KEY 
+  ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2025-10-29.clover' as any }) 
+  : null;
 
 export async function POST(req: Request) {
   try {
-    if (!BILLING_ENABLED) {
-      return NextResponse.json(
-        { ok: false, disabled: true, reason: 'Billing disabled' },
-        { status: 501 }
-      );
-    }
-
+    // 1. STRIPE CHECK
     if (!stripe) {
       return NextResponse.json(
-        { ok: false, error: 'Stripe not configured' },
+        { ok: false, error: 'Stripe not configured. Contact admin.' },
         { status: 500 }
       );
     }
 
-    const { plan, billing, addOns = [], email } = (await req.json()) as Body;
+    const body = await req.json();
+    const { plan, billing, addOns = [], email } = body as Body;
 
+    // 2. VALIDATE INPUT
     if (!plan || !['ESSENTIALS', 'PRO'].includes(plan)) {
-      return NextResponse.json(
-        { ok: false, error: 'Invalid or missing plan' },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, error: 'Invalid plan selected' }, { status: 400 });
     }
 
     if (!billing || !['monthly', 'yearly'].includes(billing)) {
-      return NextResponse.json(
-        { ok: false, error: 'Invalid or missing billing' },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, error: 'Invalid billing cycle' }, { status: 400 });
     }
 
+    // 3. CHECK PRICE IDS
     const missing: string[] = [];
-
     const planPriceId = PRICE[plan][billing];
-    if (!planPriceId) {
-      missing.push(`PRICE_${plan}_${billing.toUpperCase()}`);
-    }
+    if (!planPriceId) missing.push(`PRICE_${plan}_${billing.toUpperCase()}`);
 
     for (const addOn of addOns) {
-      const cfg = ADDON[addOn];
-      if (!cfg || !cfg[billing]) {
-        missing.push(`PRICE_ADDON_${addOn.toUpperCase()}_${billing.toUpperCase()}`);
-      }
+      const priceId = ADDON[addOn]?.[billing];
+      if (!priceId) missing.push(`PRICE_ADDON_${addOn.toUpperCase()}_${billing.toUpperCase()}`);
     }
 
     if (missing.length > 0) {
+      console.error('[create-checkout-session] Missing Price IDs:', missing.join(', '));
       return NextResponse.json(
-        {
-          ok: false,
-          error: `Missing Stripe price IDs in env: ${missing.join(', ')}`,
-        },
-        { status: 400 }
+        { ok: false, error: `Server config error. Missing: ${missing.join(', ')}` },
+        { status: 500 }
       );
     }
 
+    // 4. BUILD LINE ITEMS
     const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = [
       { price: planPriceId!, quantity: 1 },
     ];
 
     for (const addOn of addOns) {
-      const addonPriceId = ADDON[addOn]?.[billing];
+      const addonPriceId = ADDON[addOn][billing];
       if (addonPriceId) {
         line_items.push({ price: addonPriceId, quantity: 1 });
       }
     }
 
+    // 5. CREATE CHECKOUT SESSION
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
+      payment_method_types: ['card'],
       line_items,
       customer_email: email || undefined,
       billing_address_collection: 'required',
@@ -142,24 +119,32 @@ export async function POST(req: Request) {
         addOns: addOns.join(','),
       },
       subscription_data: {
-        // Stripe trial can also be set via dashboard; adjust if needed
         trial_period_days: 14,
+      },
+      payment_intent_data: {
+        setup_future_usage: 'off_session', // CARD SAVE + AUTO CHARGE
       },
     });
 
     if (!session.url) {
-      return NextResponse.json(
-        { ok: false, error: 'Stripe did not return a checkout URL' },
-        { status: 500 }
-      );
+      throw new Error('Stripe returned no URL');
     }
 
     return NextResponse.json({ ok: true, url: session.url });
+
   } catch (e: any) {
-    console.error('[create-checkout-session] Error:', e);
+    console.error('[create-checkout-session] FATAL ERROR:', e);
     return NextResponse.json(
-      { ok: false, error: e?.message || 'Checkout failed' },
+      { ok: false, error: e?.message || 'Checkout failed. Try again.' },
       { status: 500 }
     );
   }
+}
+
+export async function GET() {
+  return NextResponse.json({ 
+    ok: true, 
+    message: 'create-checkout-session endpoint is LIVE',
+    timestamp: new Date().toISOString()
+  });
 }

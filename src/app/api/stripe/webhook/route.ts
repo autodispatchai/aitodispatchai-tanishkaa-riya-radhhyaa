@@ -12,12 +12,8 @@ export const dynamic = 'force-dynamic';
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 
-if (!STRIPE_SECRET_KEY) {
-  console.warn('[webhook] Missing STRIPE_SECRET_KEY');
-}
-if (!STRIPE_WEBHOOK_SECRET) {
-  console.warn('[webhook] Missing STRIPE_WEBHOOK_SECRET');
-}
+if (!STRIPE_SECRET_KEY) console.warn('[webhook] Missing STRIPE_SECRET_KEY');
+if (!STRIPE_WEBHOOK_SECRET) console.warn('[webhook] Missing STRIPE_WEBHOOK_SECRET');
 
 const stripe = STRIPE_SECRET_KEY
   ? new Stripe(STRIPE_SECRET_KEY)
@@ -46,10 +42,9 @@ function getCustomerId(obj: any): string | null {
 export async function POST(req: NextRequest) {
   try {
     if (!stripe || !STRIPE_WEBHOOK_SECRET) {
-      console.error('[webhook] Stripe not configured');
       return NextResponse.json(
         { ok: false, error: 'Stripe not configured' },
-        { status: 500 },
+        { status: 500 }
       );
     }
 
@@ -57,7 +52,7 @@ export async function POST(req: NextRequest) {
     if (!sig) {
       return NextResponse.json(
         { ok: false, error: 'Missing Stripe signature' },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
@@ -65,45 +60,38 @@ export async function POST(req: NextRequest) {
 
     let event: Stripe.Event;
     try {
-      event = stripe.webhooks.constructEvent(
-        rawBody,
-        sig,
-        STRIPE_WEBHOOK_SECRET,
-      );
+      event = stripe.webhooks.constructEvent(rawBody, sig, STRIPE_WEBHOOK_SECRET);
     } catch (err: any) {
       console.error('[webhook] Signature failed:', err.message);
       return NextResponse.json(
         { ok: false, error: `Webhook Error: ${err.message}` },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
     switch (event.type) {
       /**
-       * 1️⃣ Checkout completed → create / link subscription
+       * 1. Checkout completed → Trial start + subscription link
        */
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
 
         const customerEmail =
-          (session.customer_details?.email as string) ||
-          (session.customer_email as string) ||
+          session.customer_details?.email ||
+          session.customer_email ||
           null;
 
         const stripeSubscriptionId = getSubscriptionId(session);
         const plan = session.metadata?.plan || 'ESSENTIALS';
         const billing = session.metadata?.billing || 'monthly';
-        const addOns =
-          session.metadata?.addOns?.split(',').filter(Boolean) || [];
+        const addOns = session.metadata?.addOns?.split(',').filter(Boolean) || [];
 
         if (!customerEmail || !stripeSubscriptionId) {
-          console.warn(
-            '[webhook] Missing email or subscriptionId on checkout.session.completed',
-          );
+          console.warn('[webhook] Missing email or subscriptionId');
           break;
         }
 
-        // Find company by email (assumes company.email = billing email)
+        // Find company by email
         const { data: company, error: companyError } = await supabaseAdmin
           .from('companies')
           .select('id, owner_id')
@@ -111,13 +99,12 @@ export async function POST(req: NextRequest) {
           .single();
 
         if (companyError || !company) {
-          console.error(
-            '[webhook] Company not found for email:',
-            customerEmail,
-            companyError,
-          );
+          console.error('[webhook] Company not found for email:', customerEmail);
           break;
         }
+
+        // Calculate trial end (14 days from now)
+        const trialEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
 
         const { error: upsertError } = await supabaseAdmin
           .from('subscriptions')
@@ -130,31 +117,23 @@ export async function POST(req: NextRequest) {
               plan,
               billing_cycle: billing,
               add_ons: addOns,
-              status: 'active',
-              trial_ends_at: null,
+              status: 'trialing', // ← TRIAL STATUS
+              trial_ends_at: trialEnd,
               current_period_end: null,
             },
-            {
-              onConflict: 'stripe_subscription_id',
-            },
+            { onConflict: 'stripe_subscription_id' }
           );
 
         if (upsertError) {
-          console.error(
-            '[webhook] Subscription upsert failed:',
-            upsertError,
-          );
+          console.error('[webhook] Subscription upsert failed:', upsertError);
         } else {
-          console.log(
-            `[webhook] Subscription linked → company=${company.id} | plan=${plan}`,
-          );
+          console.log(`[webhook] TRIAL STARTED → ${customerEmail} | Plan: ${plan}`);
         }
-
         break;
       }
 
       /**
-       * 2️⃣ Subscription lifecycle: keep status & period synced
+       * 2. Subscription updates (status, renewal, cancel)
        */
       case 'customer.subscription.created':
       case 'customer.subscription.updated':
@@ -163,72 +142,58 @@ export async function POST(req: NextRequest) {
         const stripeSubId = sub.id;
         if (!stripeSubId) break;
 
-        // Stripe types are strict; use a raw cast for timestamp fields
         const rawSub: any = sub;
-
         const periodEnd = rawSub.current_period_end
           ? new Date(rawSub.current_period_end * 1000).toISOString()
           : null;
-
         const trialEnd = rawSub.trial_end
           ? new Date(rawSub.trial_end * 1000).toISOString()
           : null;
 
-        const updatePayload: Record<string, any> = {
-          status: sub.status,
-        };
+        const updatePayload: any = { status: sub.status };
         if (periodEnd) updatePayload.current_period_end = periodEnd;
         if (trialEnd) updatePayload.trial_ends_at = trialEnd;
+        else if (sub.status === 'active') updatePayload.trial_ends_at = null; // Trial over
 
-        const { error: updateError } = await supabaseAdmin
+        const { error } = await supabaseAdmin
           .from('subscriptions')
           .update(updatePayload)
           .eq('stripe_subscription_id', stripeSubId);
 
-        if (updateError) {
-          console.error(
-            '[webhook] Subscription status update failed:',
-            updateError,
-          );
+        if (error) {
+          console.error('[webhook] Update failed:', error);
         } else {
-          console.log(
-            `[webhook] ${event.type} → stripe_subscription_id=${stripeSubId} | status=${sub.status}`,
-          );
+          console.log(`[webhook] ${event.type} → ${stripeSubId} | ${sub.status}`);
         }
-
         break;
       }
 
       /**
-       * 3️⃣ Invoices: just log for now
+       * 3. Invoice events (optional logging)
        */
       case 'invoice.paid':
       case 'invoice.payment_failed': {
         const inv = event.data.object as Stripe.Invoice;
-        const subId = getSubscriptionId(inv);
-        console.log(
-          `[webhook] ${event.type} → invoice=${inv.id} | sub=${subId || 'n/a'}`,
-        );
+        console.log(`[webhook] ${event.type} → invoice=${inv.id}`);
         break;
       }
 
-      default: {
+      default:
         break;
-      }
     }
 
     return NextResponse.json({ ok: true });
   } catch (e: any) {
-    console.error('[webhook] Error:', e);
+    console.error('[webhook] Server error:', e);
     return NextResponse.json(
       { ok: false, error: e?.message || 'Server error' },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
 
 /**
- * Simple health check
+ * Health check
  */
 export async function GET() {
   return NextResponse.json({
