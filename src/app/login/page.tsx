@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase';
 
 type Form = { email: string; password: string };
 type OAuthProvider = 'google' | 'azure';
@@ -18,9 +18,11 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Load remembered email ONLY if user opted-in earlier (no browser autofill)
+  // Load remembered email ONLY if user opted-in earlier
   useEffect(() => {
-    const saved = localStorage.getItem(REMEMBER_KEY);
+    const saved = typeof window !== 'undefined'
+      ? localStorage.getItem(REMEMBER_KEY)
+      : null;
     if (saved) {
       setForm((p) => ({ ...p, email: saved }));
       setRemember(true);
@@ -40,19 +42,25 @@ export default function LoginPage() {
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (loading) return;
-    if (issues.length) return setErr(issues[0]);
+    if (issues.length) {
+      setErr(issues[0]);
+      return;
+    }
 
     setLoading(true);
     setErr(null);
 
     try {
+      const supabase = createClient();
+
       const { error } = await supabase.auth.signInWithPassword({
         email: form.email.trim(),
         password: form.password,
       });
+
       if (error) throw error;
 
-      // Respect "Remember me" (email only; never store password)
+      // Remember email (never password)
       if (remember) {
         localStorage.setItem(REMEMBER_KEY, form.email.trim());
       } else {
@@ -72,9 +80,13 @@ export default function LoginPage() {
 
   const handleOAuth = async (provider: OAuthProvider) => {
     if (loading) return;
+
     try {
       setErr(null);
       setLoading(true);
+
+      const supabase = createClient();
+
       await supabase.auth.signInWithOAuth({
         provider,
         options: {
@@ -150,7 +162,7 @@ export default function LoginPage() {
 
         {/* Email form */}
         <form onSubmit={onSubmit} className="mt-6 grid gap-5" autoComplete="off">
-          {/* Autofill bait (hidden) — prevents browser from stuffing old values */}
+          {/* Autofill bait */}
           <input type="text" name="username" autoComplete="username" className="hidden" />
           <input type="password" name="password" autoComplete="current-password" className="hidden" />
 
@@ -193,7 +205,6 @@ export default function LoginPage() {
               </button>
             </div>
 
-            {/* Row: Remember + Forgot */}
             <div className="mt-1 flex items-center justify-between">
               <label className="flex items-center gap-2 text-xs text-neutral-600 select-none">
                 <input
@@ -211,7 +222,6 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Alerts */}
           {err && (
             <div className="rounded-xl border border-red-200 bg-red-50 text-sm text-red-700 px-3 py-2">
               {err}
@@ -225,7 +235,7 @@ export default function LoginPage() {
             type="submit"
             className="h-11 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500 text-white font-semibold tracking-tight shadow-md disabled:opacity-60 flex items-center justify-center gap-2 hover:opacity-90"
           >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
             {loading ? 'Signing in…' : 'Log In'}
           </motion.button>
 
@@ -242,4 +252,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase';
 
 type BillingCycle = 'monthly' | 'yearly';
 type PlanName = 'ESSENTIALS' | 'PRO' | 'ENTERPRISE';
@@ -10,17 +10,17 @@ type PlanName = 'ESSENTIALS' | 'PRO' | 'ENTERPRISE';
 type Plan = {
   name: PlanName;
   popular: boolean;
-  monthly: number | null; // null => custom pricing
+  monthly: number | null;
   tagline: string;
   features: string[];
-  yearlyDiscount: number; // e.g. 0.22 = 22%
+  yearlyDiscount: number;
 };
 
 type AddOn = {
   id: string;
   title: string;
   desc: string;
-  monthly: number; // per truck / month (display only)
+  monthly: number;
 };
 
 const PLANS: Plan[] = [
@@ -93,6 +93,39 @@ export default function ChoosePlanPage() {
   const [selectedAddOns, setSelectedAddOns] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [companyEmail, setCompanyEmail] = useState('');
+  const [fetching, setFetching] = useState(true);
+
+  // FETCH COMPANY EMAIL
+  useEffect(() => {
+    async function fetchCompanyEmail() {
+      const supabase = createClient();
+      const { data: { session: authSession }, error: sessionError } = await supabase.auth.getSession();
+
+      if (!authSession || sessionError) {
+        window.location.href = '/login';
+        return;
+      }
+
+      const user = authSession.user;
+
+      const { data: company, error: companyError } = await supabase
+        .from('companies')
+        .select('email')
+        .eq('owner_id', user.id)
+        .single();
+
+      if (companyError || !company?.email) {
+        alert('Please create your company first!');
+        window.location.href = '/onboarding';
+        return;
+      }
+
+      setCompanyEmail(company.email);
+      setFetching(false);
+    }
+    fetchCompanyEmail();
+  }, []);
 
   const plan = useMemo(() => PLANS.find(p => p.name === selectedPlan)!, [selectedPlan]);
   const isEnterprise = plan.monthly == null;
@@ -122,37 +155,38 @@ export default function ChoosePlanPage() {
   }
 
   async function checkout() {
+    if (fetching) return;
+    if (!companyEmail) {
+      alert('Company email not loaded');
+      return;
+    }
+
     try {
       setErr(null);
       setLoading(true);
 
       if (plan.name === 'ENTERPRISE') {
-        window.location.href = 'mailto:info@autodispatchai.com?subject=AutoDispatchAI%20Enterprise&body=Hi%2C%20we%27d%20like%20custom%20pricing.';
+        window.location.href = 'mailto:info@autodispatchai.com?subject=AutoDispatchAI%20Enterprise';
         return;
       }
-
-      const { data: s } = await supabase.auth.getSession();
-      const token = s.session?.access_token;
-      if (!token) { window.location.href = '/login'; return; }
 
       const chosenAddOnIds = Object.keys(selectedAddOns).filter(k => selectedAddOns[k]);
 
       const res = await fetch('/api/billing/create-checkout-session', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          plan: plan.name,          // 'ESSENTIALS' | 'PRO'
-          billing,                  // 'monthly' | 'yearly'
-          addOns: chosenAddOnIds,   // e.g. ['city','highway']
+          plan: plan.name,
+          billing,
+          addOns: chosenAddOnIds,
+          email: companyEmail,
         }),
       });
+
       const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || 'Checkout error');
-      if (!json?.url) throw new Error('No checkout URL returned');
+      if (!res.ok) throw new Error(json?.error || 'Checkout failed');
+      if (!json?.url) throw new Error('No checkout URL');
+
       window.location.href = json.url;
     } catch (e: any) {
       setErr(e?.message || 'Checkout error');
@@ -161,22 +195,26 @@ export default function ChoosePlanPage() {
     }
   }
 
+  if (fetching) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-lg">Loading your company...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-white text-neutral-900">
-      {/* brand accent */}
       <div className="h-[3px] w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500" />
 
       <header className="py-10 text-center">
         <div className="font-extrabold tracking-tight text-3xl sm:text-4xl">
-          Auto
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500">Dispatch</span>
-          AI
+          Auto<span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500">Dispatch</span>AI
         </div>
         <p className="text-sm text-neutral-600 mt-2">Choose your plan • 14-day free trial • Cancel anytime</p>
       </header>
 
       <main className="max-w-6xl mx-auto px-6 pb-16 grid lg:grid-cols-[1fr,380px] gap-10">
-        {/* Left: Plans + Add-ons */}
         <section>
           <div className="flex justify-center mb-8">
             {isEnterprise ? (
@@ -185,16 +223,10 @@ export default function ChoosePlanPage() {
                   <span className="font-bold">Custom pricing</span> — Contact Sales
                 </span>
                 <div className="flex gap-3">
-                  <a
-                    href="mailto:info@autodispatchai.com?subject=AutoDispatchAI%20Enterprise"
-                    className="h-10 px-4 rounded-xl bg-neutral-900 text-white text-sm font-medium flex items-center justify-center hover:bg-neutral-800"
-                  >
+                  <a href="mailto:info@autodispatchai.com?subject=AutoDispatchAI%20Enterprise" className="h-10 px-4 rounded-xl bg-neutral-900 text-white text-sm font-medium flex items-center justify-center hover:bg-neutral-800">
                     Email Sales
                   </a>
-                  <a
-                    href="tel:+14164274542"
-                    className="h-10 px-4 rounded-xl border border-neutral-300 text-sm font-medium flex items-center justify-center hover:bg-neutral-50"
-                  >
+                  <a href="tel:+14164274542" className="h-10 px-4 rounded-xl border border-neutral-300 text-sm font-medium flex items-center justify-center hover:bg-neutral-50">
                     Call Sales (+1 416-427-4542)
                   </a>
                 </div>
@@ -318,7 +350,6 @@ export default function ChoosePlanPage() {
           </div>
         </section>
 
-        {/* Right: Summary */}
         <aside className="sticky top-6 h-fit border rounded-2xl p-6 shadow-sm">
           <h3 className="text-lg font-semibold">Summary</h3>
           <p className="text-sm text-neutral-500">Per truck • {isEnterprise ? 'Custom' : (billing === 'yearly' ? 'Yearly' : 'Monthly')} billing</p>
@@ -348,13 +379,14 @@ export default function ChoosePlanPage() {
 
           <button
             onClick={checkout}
-            disabled={loading}
+            disabled={loading || fetching}
             className="mt-5 h-11 w-full rounded-xl font-semibold tracking-tight bg-neutral-900 text-white hover:bg-neutral-800 disabled:opacity-60"
           >
             {plan.name === 'ENTERPRISE' ? 'Contact Sales' : (loading ? 'Processing…' : `Continue with ${plan.name}`)}
           </button>
 
           <p className="text-xs text-neutral-500 mt-3">Change add-ons anytime from Billing. Taxes may apply.</p>
+          <p className="text-xs text-neutral-500 mt-1">Billing email: <strong>{companyEmail}</strong></p>
         </aside>
       </main>
     </div>

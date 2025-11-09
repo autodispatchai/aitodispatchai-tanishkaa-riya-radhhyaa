@@ -4,12 +4,9 @@ import React, { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase';
 
-// ✅ Canonical site URL (set NEXT_PUBLIC_SITE_URL in env to https://www.autodispatchai.com)
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ||
-  (typeof window !== 'undefined' ? window.location.origin : '');
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://autodispatchai.com';
 
 type Form = { name: string; email: string; password: string };
 type OAuthProvider = 'google' | 'azure';
@@ -21,7 +18,6 @@ export default function SignupPage() {
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
 
-  // simple validation
   const issues = useMemo(() => {
     const m: string[] = [];
     if (!form.name.trim()) m.push('Full name is required.');
@@ -33,29 +29,33 @@ export default function SignupPage() {
   const onChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((p) => ({ ...p, [e.target.name]: e.target.value }));
 
-  // 🔹 Email + Password Signup
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (loading) return;
-    if (issues.length) return setErr(issues[0]);
+    if (issues.length) {
+      setErr(issues[0]);
+      return;
+    }
 
     setLoading(true);
     setErr(null);
     setOk(null);
 
     try {
+      const supabase = createClient();
+
       const { error } = await supabase.auth.signUp({
         email: form.email.trim(),
         password: form.password,
         options: {
           data: { full_name: form.name.trim() },
-          // ✅ verify link -> /auth/callback on SAME host (www)
-          emailRedirectTo: `${SITE_URL}/auth/callback`,
+          emailRedirectTo: `${SITE_URL}/billing/choose-plan`,
         },
       });
 
       if (error) throw error;
-      setOk('Account created! Check your inbox to verify your email.');
+
+      setOk('Account created! Check your email to verify, then continue.');
       setForm({ name: '', email: '', password: '' });
     } catch (e: any) {
       setErr(e?.message ?? 'Signup failed.');
@@ -64,24 +64,25 @@ export default function SignupPage() {
     }
   };
 
-  // 🔹 Gmail & Outlook signup (OAuth)
   const handleOAuth = async (provider: OAuthProvider) => {
     if (loading) return;
+
     try {
       setErr(null);
       setLoading(true);
+
+      const supabase = createClient();
+
       await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          // ✅ start & finish BOTH on https://www.autodispatchai.com/auth/callback
-          redirectTo: `${SITE_URL}/auth/callback`,
+          redirectTo: `${SITE_URL}/billing/choose-plan`,
           queryParams:
             provider === 'google'
               ? { access_type: 'offline', prompt: 'consent' }
               : undefined,
         },
       });
-      // Supabase handles the redirect
     } catch (e: any) {
       setErr(e?.message ?? 'OAuth sign-in failed.');
       setLoading(false);
@@ -122,7 +123,6 @@ export default function SignupPage() {
             <img src="/google-icon.svg" alt="Google" className="w-5 h-5" />
             Continue with Google
           </button>
-
           <button
             type="button"
             onClick={() => handleOAuth('azure')}
@@ -158,7 +158,6 @@ export default function SignupPage() {
               value={form.name}
               onChange={onChange}
               required
-              autoComplete="off"
               className="h-11 rounded-xl border border-neutral-300 px-3 text-[15px] focus:ring-2 focus:ring-purple-500/25 focus:outline-none"
             />
           </div>
@@ -175,7 +174,6 @@ export default function SignupPage() {
               value={form.email}
               onChange={onChange}
               required
-              autoComplete="off"
               className="h-11 rounded-xl border border-neutral-300 px-3 text-[15px] focus:ring-2 focus:ring-purple-500/25 focus:outline-none"
             />
           </div>
@@ -210,7 +208,6 @@ export default function SignupPage() {
             </p>
           </div>
 
-          {/* Alerts */}
           {err && (
             <div className="rounded-xl border border-red-200 bg-red-50 text-sm text-red-700 px-3 py-2">
               {err}
@@ -229,7 +226,7 @@ export default function SignupPage() {
             type="submit"
             className="h-11 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500 text-white font-semibold tracking-tight shadow-md disabled:opacity-60 flex items-center justify-center gap-2 hover:opacity-90"
           >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
             {loading ? 'Creating Account…' : 'Sign Up'}
           </motion.button>
 
