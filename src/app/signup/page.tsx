@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase';
+import { useRouter } from 'next/navigation';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://autodispatchai.com';
 
@@ -12,6 +13,7 @@ type Form = { name: string; email: string; password: string };
 type OAuthProvider = 'google' | 'azure';
 
 export default function SignupPage() {
+  const router = useRouter();
   const [form, setForm] = useState<Form>({ name: '', email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -44,18 +46,21 @@ export default function SignupPage() {
     try {
       const supabase = createClient();
 
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email: form.email.trim(),
         password: form.password,
         options: {
           data: { full_name: form.name.trim() },
-          emailRedirectTo: `${SITE_URL}/billing/choose-plan`,
         },
       });
 
       if (error) throw error;
 
-      setOk('Account created! Check your email to verify, then continue.');
+      setOk('Account created! Redirecting to create company…');
+
+      // ✅ Step-wise redirect: after signup → create company
+      router.push('/create-company');
+
       setForm({ name: '', email: '', password: '' });
     } catch (e: any) {
       setErr(e?.message ?? 'Signup failed.');
@@ -76,7 +81,7 @@ export default function SignupPage() {
       await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${SITE_URL}/billing/choose-plan`,
+          redirectTo: `${SITE_URL}/create-company`, // Step-wise redirect for OAuth
           queryParams:
             provider === 'google'
               ? { access_type: 'offline', prompt: 'consent' }

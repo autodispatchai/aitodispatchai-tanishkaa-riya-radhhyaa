@@ -55,11 +55,12 @@ export default function CreateCompanyPage() {
     try {
       setLoading(true);
 
-      const user = (await supabase.auth.getSession()).data.session?.user;
-      if (!user) throw new Error('Not logged in');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('You must be logged in to create a company.');
 
-      const body = {
-        owner_id: user.id,
+      // Insert company
+      const { error } = await supabase.from('companies').insert([{
+        owner_id: session.user.id,
         company_name: companyName.trim(),
         legal_name: legalName.trim() || null,
         email: email.trim(),
@@ -72,15 +73,17 @@ export default function CreateCompanyPage() {
         postal_code: postal.trim(),
         country,
         consent_public_listing: optIn,
-      };
+      }]);
 
-      const { error } = await supabase.from('companies').insert(body);
       if (error) throw error;
 
+      // Success
       setOk(true);
+
+      // Redirect to Choose Plan after short delay
       setTimeout(() => router.push('/billing/choose-plan'), 800);
     } catch (e: any) {
-      setErr(e?.message || 'Failed to save. Please try again.');
+      setErr(e?.message || 'Failed to save company. Try again.');
     } finally {
       setLoading(false);
     }
@@ -120,7 +123,6 @@ export default function CreateCompanyPage() {
                   placeholder={regPlaceholder}
                   className="h-11 w-full rounded-xl border border-neutral-300 px-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-purple-500/20"
                 />
-                <p className="mt-1 text-xs text-neutral-500">Optional for now; helps with verification.</p>
               </div>
             </div>
 
