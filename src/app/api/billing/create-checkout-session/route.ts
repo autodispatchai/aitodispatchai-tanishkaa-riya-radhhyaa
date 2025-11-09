@@ -5,8 +5,10 @@ import Stripe from 'stripe';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// LIVE URL — YE ZAROORI HAI!
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.autodispatchai.com';
+
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 
 // PRICE IDS — LIVE MODE
 const PRICE = {
@@ -97,7 +99,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // LINE ITEMS — YE GALAT THA, AB FIX!
     const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = [
       {
         price: planPriceId!,
@@ -119,6 +120,7 @@ export async function POST(req: Request) {
       customer_email: email || undefined,
       billing_address_collection: 'required',
       allow_promotion_codes: true,
+      // LIVE URL — YE SABSE ZAROORI FIX!
       success_url: `${BASE_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${BASE_URL}/billing/choose-plan?canceled=1`,
       metadata: {
