@@ -27,6 +27,18 @@ export default function LoginPage() {
       setForm((p) => ({ ...p, email: saved }));
       setRemember(true);
     }
+
+    // Auto-redirect if already logged in
+    const supabase = createClient();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        fetch('/api/auth/redirect')
+          .then(res => {
+            if (res.redirected) window.location.href = res.url;
+          })
+          .catch(err => console.error('Redirect failed', err));
+      }
+    });
   }, []);
 
   const issues = useMemo(() => {
@@ -52,7 +64,6 @@ export default function LoginPage() {
 
     try {
       const supabase = createClient();
-
       const { error } = await supabase.auth.signInWithPassword({
         email: form.email.trim(),
         password: form.password,
@@ -61,13 +72,15 @@ export default function LoginPage() {
       if (error) throw error;
 
       // Remember email (never password)
-      if (remember) {
-        localStorage.setItem(REMEMBER_KEY, form.email.trim());
-      } else {
-        localStorage.removeItem(REMEMBER_KEY);
-      }
+      if (remember) localStorage.setItem(REMEMBER_KEY, form.email.trim());
+      else localStorage.removeItem(REMEMBER_KEY);
 
-      window.location.href = '/onboarding/create-company';
+      // Redirect using server-side logic
+      fetch('/api/auth/redirect')
+        .then(res => {
+          if (res.redirected) window.location.href = res.url;
+        })
+        .catch(() => (window.location.href = '/onboarding/create-company'));
     } catch (e: any) {
       setErr(
         (e?.message ?? 'Login failed.') +
@@ -90,7 +103,7 @@ export default function LoginPage() {
       await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${window.location.origin}/onboarding/create-company`,
+          redirectTo: `${window.location.origin}/api/auth/redirect`,
           queryParams:
             provider === 'google'
               ? { access_type: 'offline', prompt: 'consent' }
