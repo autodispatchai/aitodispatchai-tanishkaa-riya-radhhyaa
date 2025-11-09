@@ -354,13 +354,7 @@ export default function ChoosePlanPage() {
             </button>
 
             {/* JUST VIEW PRICING BUTTON — FIXED */}
-            <button
-              type="button"
-              onClick={() => {}}
-              className="w-full h-11 rounded-xl font-semibold border border-gray-300 text-gray-700 hover:bg-gray-50 transition"
-            >
-              Just View Pricing
-            </button>
+            
           </div>
 
           <p className="text-xs text-neutral-500 mt-4 text-center">
