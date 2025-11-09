@@ -1,3 +1,4 @@
+// src/app/billing/choose-plan/page.tsx
 'use client';
 
 import { useMemo, useState } from 'react';
@@ -69,15 +70,15 @@ const PLANS: Plan[] = [
 ];
 
 const ADD_ONS: AddOn[] = [
-  { id: 'city',       title: 'City Dispatch Maestro',  desc: 'Plans city pickups & deliveries automatically.', monthly: 15 },
-  { id: 'highway',    title: 'Highway Chess Master',   desc: 'Triangle Load Hunter, HOS-aware scheduling, swap suggestions.', monthly: 20 },
-  { id: 'bestfinder', title: 'Best Load Finder',       desc: 'Pins the most profitable loads across boards automatically.', monthly: 15 },
+  { id: 'city',       title: 'City Dispatch Maestro',  desc: 'Plans city0 pickups & deliveries automatically.', monthly: 15 },
+  { id: 'highway',    title: 'Highway Chess Master',   desc: 'Triangle Load Hunter, HOS-aware scheduling.', monthly: 20 },
+  { id: 'bestfinder', title: 'Best Load Finder',       desc: 'Pins the most profitable loads automatically.', monthly: 15 },
   { id: 'safety',     title: 'AI Safety Supervisor',   desc: 'Alerts for overspeeding or harsh braking.', monthly: 10 },
   { id: 'cb',         title: 'Cross-Border Compliance', desc: 'Files ACE/ACI e-Manifests automatically.', monthly: 20 },
   { id: 'voice',      title: '24/7 Voice & SMS Assistant', desc: 'AI assistant that talks to brokers & drivers.', monthly: 10 },
   { id: 'agent',      title: 'Personalized AI Agent',  desc: 'Builds relationships with your top brokers.', monthly: 15 },
-  { id: 'pay',        title: 'Automated Invoicing & Payroll', desc: 'CLERK agent for invoicing + payroll-ready reports.', monthly: 15 },
-  { id: 'score',      title: 'Broker Scorecard & Risk Alerts', desc: 'Credit/OTR risk & fraud prevention alerts.', monthly: 10 },
+  { id: 'pay',        title: 'Automated Invoicing & Payroll', desc: 'CLERK agent for invoicing + payroll.', monthly: 15 },
+  { id: 'score',      title: 'Broker Scorecard & Risk Alerts', desc: 'Credit/OTR risk & fraud prevention.', monthly: 10 },
 ];
 
 function priceForCycle(monthly: number, cycle: BillingCycle, discount: number): number {
@@ -136,8 +137,8 @@ export default function ChoosePlanPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          plan: plan.name,
-          billing: billing,           // ← YE ZAROORI THA!
+          plan: selectedPlan,        // FIXED: selectedPlan (not plan.name)
+          billing: billing,
           addOns: chosenAddOnIds,
         }),
       });
@@ -149,14 +150,14 @@ export default function ChoosePlanPage() {
       }
 
       if (!json?.url) {
-        throw new Error('No checkout URL received');
+        throw new Error('No checkout URL');
       }
 
       window.location.href = json.url;
 
     } catch (e: any) {
       console.error('Checkout error:', e);
-      setErr(e?.message || 'Something went wrong. Please try again.');
+      setErr(e?.message || 'Something went wrong.');
     } finally {
       setLoading(false);
     }
@@ -175,6 +176,7 @@ export default function ChoosePlanPage() {
 
       <main className="max-w-6xl mx-auto px-6 pb-16 grid lg:grid-cols-[1fr,380px] gap-10">
         <section>
+          {/* Billing Toggle */}
           <div className="flex justify-center mb-8">
             {isEnterprise ? (
               <div className="flex flex-col items-center gap-3">
@@ -208,7 +210,7 @@ export default function ChoosePlanPage() {
             )}
           </div>
 
-          {/* ERROR MESSAGE */}
+          {/* ERROR */}
           {err && (
             <div className="mx-auto mb-6 max-w-2xl rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 text-center font-medium">
               ERROR: {err}
@@ -221,8 +223,7 @@ export default function ChoosePlanPage() {
               const active = p.name === selectedPlan;
               const showSave = p.monthly != null && billing === 'yearly' && p.yearlyDiscount > 0;
               const perCycle = p.monthly != null ? priceForCycle(p.monthly, billing, p.yearlyDiscount) : 0;
-              const compareAnnual = p.monthly != null ? p.monthly * 12 : 0;
-              const savedAmount = p.monthly != null && billing === 'yearly' ? compareAnnual - perCycle : 0;
+              const savedAmount = p.monthly != null && billing === 'yearly' ? p.monthly * 12 - perCycle : 0;
 
               return (
                 <motion.button
@@ -276,7 +277,7 @@ export default function ChoosePlanPage() {
           <div className="mt-12">
             <h2 className="text-2xl font-bold">Build Your Own Add-Ons</h2>
             <p className="text-sm text-neutral-500 mt-1">
-              Select add-ons to include with <span className="font-medium">{selectedPlan}</span>. Each add-on is billed per truck, per {isEnterprise ? '—' : (billing === 'yearly' ? 'year' : 'month')}.
+              Select add-ons to include with <span className="font-medium">{selectedPlan}</span>.
             </p>
 
             <div className="mt-6 grid gap-3">
@@ -343,6 +344,7 @@ export default function ChoosePlanPage() {
           </div>
 
           <div className="mt-5 space-y-3">
+            {/* START TRIAL BUTTON */}
             <button
               onClick={checkout}
               disabled={loading}
@@ -351,7 +353,9 @@ export default function ChoosePlanPage() {
               {loading ? 'Processing…' : 'Start 14-Day Free Trial'}
             </button>
 
+            {/* JUST VIEW PRICING BUTTON — FIXED */}
             <button
+              type="button"
               onClick={() => {}}
               className="w-full h-11 rounded-xl font-semibold border border-gray-300 text-gray-700 hover:bg-gray-50 transition"
             >
