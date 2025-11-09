@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 
-// PRICE IDS (MUST BE IN .env!)
+// PRICE IDS — LIVE MODE
 const PRICE = {
   ESSENTIALS: {
     monthly: process.env.PRICE_ESSENTIALS_MONTHLY,
@@ -47,16 +47,18 @@ if (!STRIPE_SECRET_KEY) {
   console.error('[create-checkout-session] STRIPE_SECRET_KEY MISSING!');
 }
 
-const stripe = STRIPE_SECRET_KEY 
-  ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2025-10-29.clover' as any }) 
+const stripe = STRIPE_SECRET_KEY
+  ? new Stripe(STRIPE_SECRET_KEY, {
+      apiVersion: '2025-10-29.clover' as any,
+      typescript: true,
+    })
   : null;
 
 export async function POST(req: Request) {
   try {
-    // 1. STRIPE CHECK
     if (!stripe) {
       return NextResponse.json(
-        { ok: false, error: 'Stripe not configured. Contact admin.' },
+        { ok: false, error: 'Stripe not configured.' },
         { status: 500 }
       );
     }
@@ -64,16 +66,20 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { plan, billing, addOns = [], email } = body as Body;
 
-    // 2. VALIDATE INPUT
     if (!plan || !['ESSENTIALS', 'PRO'].includes(plan)) {
-      return NextResponse.json({ ok: false, error: 'Invalid plan selected' }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: 'Invalid plan selected.' },
+        { status: 400 }
+      );
     }
 
     if (!billing || !['monthly', 'yearly'].includes(billing)) {
-      return NextResponse.json({ ok: false, error: 'Invalid billing cycle' }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: 'Invalid billing cycle.' },
+        { status: 400 }
+      );
     }
 
-    // 3. CHECK PRICE IDS
     const missing: string[] = [];
     const planPriceId = PRICE[plan][billing];
     if (!planPriceId) missing.push(`PRICE_${plan}_${billing.toUpperCase()}`);
@@ -84,16 +90,19 @@ export async function POST(req: Request) {
     }
 
     if (missing.length > 0) {
-      console.error('[create-checkout-session] Missing Price IDs:', missing.join(', '));
+      console.error('[create-checkout-session] Missing env vars:', missing.join(', '));
       return NextResponse.json(
-        { ok: false, error: `Server config error. Missing: ${missing.join(', ')}` },
+        { ok: false, error: 'Server config error. Contact support.' },
         { status: 500 }
       );
     }
 
-    // 4. BUILD LINE ITEMS
+    // LINE ITEMS — YE GALAT THA, AB FIX!
     const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = [
-      { price: planPriceId!, quantity: 1 },
+      {
+        price: planPriceId!,
+        quantity: 1,
+      },
     ];
 
     for (const addOn of addOns) {
@@ -103,7 +112,6 @@ export async function POST(req: Request) {
       }
     }
 
-    // 5. CREATE CHECKOUT SESSION
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
@@ -122,18 +130,18 @@ export async function POST(req: Request) {
         trial_period_days: 14,
       },
       payment_intent_data: {
-        setup_future_usage: 'off_session', // CARD SAVE + AUTO CHARGE
+        setup_future_usage: 'off_session',
       },
     });
 
     if (!session.url) {
-      throw new Error('Stripe returned no URL');
+      throw new Error('No checkout URL from Stripe');
     }
 
     return NextResponse.json({ ok: true, url: session.url });
 
   } catch (e: any) {
-    console.error('[create-checkout-session] FATAL ERROR:', e);
+    console.error('[create-checkout-session] ERROR:', e);
     return NextResponse.json(
       { ok: false, error: e?.message || 'Checkout failed. Try again.' },
       { status: 500 }
@@ -142,9 +150,9 @@ export async function POST(req: Request) {
 }
 
 export async function GET() {
-  return NextResponse.json({ 
-    ok: true, 
-    message: 'create-checkout-session endpoint is LIVE',
-    timestamp: new Date().toISOString()
+  return NextResponse.json({
+    ok: true,
+    message: 'create-checkout-session endpoint LIVE',
+    timestamp: new Date().toISOString(),
   });
 }
