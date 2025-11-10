@@ -46,21 +46,19 @@ export default function SignupPage() {
     try {
       const supabase = createClient();
 
-      const { data, error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email: form.email.trim(),
         password: form.password,
         options: {
           data: { full_name: form.name.trim() },
+          // CLEAN URL + MAGIC LINK → Direct create-company
+          emailRedirectTo: `${SITE_URL}/create-company`,
         },
       });
 
       if (error) throw error;
 
-      setOk('Account created! Redirecting to create company…');
-
-      // ✅ Step-wise redirect: after signup → create company
-      router.push('/create-company');
-
+      setOk('Magic link sent! Check your email and click to continue.');
       setForm({ name: '', email: '', password: '' });
     } catch (e: any) {
       setErr(e?.message ?? 'Signup failed.');
@@ -81,11 +79,12 @@ export default function SignupPage() {
       await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${SITE_URL}/create-company`, // Step-wise redirect for OAuth
-          queryParams:
-            provider === 'google'
-              ? { access_type: 'offline', prompt: 'consent' }
-              : undefined,
+          // CLEAN URL → Direct create-company (no /onboarding)
+          redirectTo: `${SITE_URL}/create-company`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
         },
       });
     } catch (e: any) {
@@ -153,9 +152,7 @@ export default function SignupPage() {
         {/* Email form */}
         <form onSubmit={onSubmit} className="mt-6 grid gap-5" autoComplete="off">
           <div className="grid gap-2">
-            <label htmlFor="name" className="text-sm text-neutral-700">
-              Full Name
-            </label>
+            <label htmlFor="name" className="text-sm text-neutral-700">Full Name</label>
             <input
               id="name"
               name="name"
@@ -168,9 +165,7 @@ export default function SignupPage() {
           </div>
 
           <div className="grid gap-2">
-            <label htmlFor="email" className="text-sm text-neutral-700">
-              Email
-            </label>
+            <label htmlFor="email" className="text-sm text-neutral-700">Email</label>
             <input
               id="email"
               name="email"
@@ -184,9 +179,7 @@ export default function SignupPage() {
           </div>
 
           <div className="grid gap-2">
-            <label htmlFor="password" className="text-sm text-neutral-700">
-              Password
-            </label>
+            <label htmlFor="password" className="text-sm text-neutral-700">Password</label>
             <div className="relative">
               <input
                 id="password"
@@ -208,21 +201,11 @@ export default function SignupPage() {
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
-            <p className="text-xs text-neutral-500">
-              8+ characters recommended. You’ll verify your email next.
-            </p>
+            <p className="text-xs text-neutral-500">8+ characters. We'll send a magic link to your email.</p>
           </div>
 
-          {err && (
-            <div className="rounded-xl border border-red-200 bg-red-50 text-sm text-red-700 px-3 py-2">
-              {err}
-            </div>
-          )}
-          {ok && (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 text-sm text-emerald-700 px-3 py-2">
-              {ok}
-            </div>
-          )}
+          {err && <div className="rounded-xl border border-red-200 bg-red-50 text-sm text-red-700 px-3 py-2">{err}</div>}
+          {ok && <div className="rounded-xl border border-emerald-200 bg-emerald-50 text-sm text-emerald-700 px-3 py-2">{ok}</div>}
 
           <motion.button
             whileHover={{ scale: loading ? 1 : 1.02 }}
@@ -232,32 +215,24 @@ export default function SignupPage() {
             className="h-11 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500 text-white font-semibold tracking-tight shadow-md disabled:opacity-60 flex items-center justify-center gap-2 hover:opacity-90"
           >
             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            {loading ? 'Creating Account…' : 'Sign Up'}
+            {loading ? 'Sending Magic Link…' : 'Send Magic Link'}
           </motion.button>
 
           <p className="text-[12px] text-neutral-500 text-center">
             By continuing you agree to our{' '}
             <Link href="/terms" className="underline text-neutral-800">
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500">
-                Terms
-              </span>
-            </Link>{' '}
-            &{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500">Terms</span>
+            </Link> &{' '}
             <Link href="/privacy" className="underline text-neutral-800">
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500">
-                Privacy
-              </span>
-            </Link>
-            .
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500">Privacy</span>
+            </Link>.
           </p>
         </form>
 
         <p className="text-sm text-neutral-500 text-center mt-6">
           Already have an account?{' '}
           <Link href="/login" className="font-medium underline">
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500">
-              Log in
-            </span>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500">Log in</span>
           </Link>
         </p>
       </motion.div>
