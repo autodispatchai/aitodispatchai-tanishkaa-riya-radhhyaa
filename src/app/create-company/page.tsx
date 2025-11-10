@@ -1,16 +1,17 @@
+// src/app/create-company/page.tsx
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createClient } from '@/lib/supabase';
 
 type Country = 'Canada' | 'USA';
 
-export default function CreateCompanyPage() {
+function CreateCompanyContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const inviteCode = searchParams.get('code'); // For future invite system
+  const inviteCode = searchParams.get('code');
 
   const supabase = createClient();
 
@@ -64,7 +65,6 @@ export default function CreateCompanyPage() {
         return;
       }
 
-      // Insert company
       const { error } = await supabase.from('companies').insert([{
         owner_id: session.user.id,
         company_name: companyName.trim(),
@@ -79,13 +79,13 @@ export default function CreateCompanyPage() {
         postal_code: postal.trim(),
         country,
         consent_public_listing: optIn,
-        invite_code: inviteCode || null, // Future invite tracking
+        invite_code: inviteCode || null,
       }]);
 
       if (error) throw error;
 
       setOk(true);
-      setTimeout(() => router.push('/choose-plan'), 800); // CLEAN URL
+      setTimeout(() => router.push('/choose-plan'), 800);
     } catch (e: any) {
       setErr(e?.message || 'Failed to save company. Try again.');
     } finally {
@@ -93,11 +93,9 @@ export default function CreateCompanyPage() {
     }
   }
 
-  // Auto-fill if user came from invite
   useEffect(() => {
     if (inviteCode) {
       console.log('Invite code detected:', inviteCode);
-      // Future: fetch invite data and pre-fill
     }
   }, [inviteCode]);
 
@@ -237,7 +235,7 @@ export default function CreateCompanyPage() {
               </div>
             </div>
 
-            {/* MC Number (USA) */}
+            {/* MC Number */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-neutral-800">MC Number (optional, USA)</label>
@@ -270,7 +268,7 @@ export default function CreateCompanyPage() {
                   type="checkbox"
                   checked={optIn}
                   onChange={(e) => setOptIn(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-neutral-300 text-purple-600 focus-inset ring-purple-500"
+                  className="mt-0.5 h-4 w-4 rounded border-neutral-300 text-purple-600 focus:ring-purple-500"
                 />
                 <span className="text-neutral-700">
                   I’d like to receive product updates and onboarding emails. (Optional)
@@ -280,15 +278,33 @@ export default function CreateCompanyPage() {
 
             {/* Alerts */}
             <AnimatePresence>
-              {err && <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{err}</motion.div>}
-              {ok && <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">Company created successfully! Redirecting to plan selection...</motion.div>}
+              {err && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+                >
+                  {err}
+                </motion.div>
+              )}
+              {ok && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700"
+                >
+                  Company created successfully! Redirecting to plan selection...
+                </motion.div>
+              )}
             </AnimatePresence>
 
             {/* Submit */}
             <div className="pt-4">
-              <button 
-                type="submit" 
-                disabled={loading || !agreeTos} 
+              <button
+                type="submit"
+                disabled={loading || !agreeTos}
                 className="w-full h-12 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500 px-6 font-semibold text-white shadow-md hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed transition flex items-center justify-center gap-2"
               >
                 {loading ? (
@@ -303,5 +319,22 @@ export default function CreateCompanyPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function CreateCompanyPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-white">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-purple-600 mx-auto mb-4"></div>
+            <p className="text-xl font-medium">Loading...</p>
+          </div>
+        </div>
+      }
+    >
+      <CreateCompanyContent />
+    </Suspense>
   );
 }
