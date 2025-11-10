@@ -18,27 +18,32 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Load remembered email ONLY if user opted-in earlier
+  // Load remembered email + AUTO REDIRECT IF LOGGED IN
   useEffect(() => {
-    const saved = typeof window !== 'undefined'
-      ? localStorage.getItem(REMEMBER_KEY)
-      : null;
+    const supabase = createClient();
+
+    // Check session on mount
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        window.location.href = '/app/dashboard';
+      }
+    });
+
+    // Listen for auth changes (OAuth callback ke liye)
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        window.location.href = '/app/dashboard';
+      }
+    });
+
+    // Load saved email
+    const saved = typeof window !== 'undefined' ? localStorage.getItem(REMEMBER_KEY) : null;
     if (saved) {
       setForm((p) => ({ ...p, email: saved }));
       setRemember(true);
     }
 
-    // Auto-redirect if already logged in
-    const supabase = createClient();
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        fetch('/api/auth/redirect')
-          .then(res => {
-            if (res.redirected) window.location.href = res.url;
-          })
-          .catch(err => console.error('Redirect failed', err));
-      }
-    });
+    return () => listener?.subscription?.unsubscribe();
   }, []);
 
   const issues = useMemo(() => {
@@ -53,9 +58,8 @@ export default function LoginPage() {
 
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (loading) return;
-    if (issues.length) {
-      setErr(issues[0]);
+    if (loading || issues.length) {
+      setErr(issues[0] || 'Please fix errors.');
       return;
     }
 
@@ -71,16 +75,10 @@ export default function LoginPage() {
 
       if (error) throw error;
 
-      // Remember email (never password)
       if (remember) localStorage.setItem(REMEMBER_KEY, form.email.trim());
       else localStorage.removeItem(REMEMBER_KEY);
 
-      // Redirect using server-side logic
-      fetch('/api/auth/redirect')
-        .then(res => {
-          if (res.redirected) window.location.href = res.url;
-        })
-        .catch(() => (window.location.href = '/onboarding/create-company'));
+      window.location.href = '/app/dashboard';
     } catch (e: any) {
       setErr(
         (e?.message ?? 'Login failed.') +
@@ -93,27 +91,17 @@ export default function LoginPage() {
 
   const handleOAuth = async (provider: OAuthProvider) => {
     if (loading) return;
+    setErr(null);
+    setLoading(true);
 
-    try {
-      setErr(null);
-      setLoading(true);
-
-      const supabase = createClient();
-
-      await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: `${window.location.origin}/api/auth/redirect`,
-          queryParams:
-            provider === 'google'
-              ? { access_type: 'offline', prompt: 'consent' }
-              : undefined,
-        },
-      });
-    } catch (e: any) {
-      setErr(e?.message ?? 'OAuth sign-in failed.');
-      setLoading(false);
-    }
+    const supabase = createClient();
+    await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: `${window.location.origin}/api/auth/redirect`,
+        queryParams: provider === 'google' ? { access_type: 'offline', prompt: 'consent' } : undefined,
+      },
+    });
   };
 
   const fadeUp = { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 } };
@@ -175,7 +163,6 @@ export default function LoginPage() {
 
         {/* Email form */}
         <form onSubmit={onSubmit} className="mt-6 grid gap-5" autoComplete="off">
-          {/* Autofill bait */}
           <input type="text" name="username" autoComplete="username" className="hidden" />
           <input type="password" name="password" autoComplete="current-password" className="hidden" />
 
@@ -228,7 +215,6 @@ export default function LoginPage() {
                 />
                 Remember me (email only)
               </label>
-
               <Link href="/reset-password" className="text-xs text-neutral-500 hover:text-neutral-800 underline">
                 Forgot password?
               </Link>
