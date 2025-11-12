@@ -1,66 +1,35 @@
-// src/middleware.ts
-import { createServerClient } from '@supabase/ssr';
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+// middleware.ts (ROOT FOLDER MEIN)
+import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
+import { NextResponse, type NextRequest } from 'next/server';
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get: (name) => req.cookies.get(name)?.value,
-        set: () => {},
-        remove: () => {},
-      },
-    }
-  );
+  const supabase = createMiddlewareClient({ req, res });
 
   const { data: { session } } = await supabase.auth.getSession();
 
   const url = req.nextUrl;
-  const pathname = url.pathname;
 
-  // Agar login page pe hai aur already logged in → company check karo
-  if (session && pathname === '/login') {
-    const { data: company } = await supabase
-      .from('companies')
-      .select('id')
-      .eq('owner_id', session.user.id)
-      .single();
-
-    if (company) {
-      return NextResponse.redirect(new URL('/app', req.url));
-    } else {
-      return NextResponse.redirect(new URL('/onboarding', req.url));
+  // PROTECTED ROUTES
+  if (url.pathname.startsWith('/dashboard') || url.pathname.startsWith('/choose-plan')) {
+    if (!session) {
+      return NextResponse.redirect(new URL('/login', req.url));
     }
   }
 
-  // Agar billing ya app pe ja raha hai aur company nahi bani → onboarding pe bhej do
-  if (session && (pathname.startsWith('/billing') || pathname.startsWith('/app'))) {
+  // AFTER LOGIN → CHECK COMPANY
+  if (session && (url.pathname === '/' || url.pathname.startsWith('/signup'))) {
     const { data: company } = await supabase
       .from('companies')
-      .select('id')
-      .eq('owner_id', session.user.id)
-      .single();
+      .select('subscription_status')
+      .eq('user_id', session.user.id)
+      .maybeSingle();
 
-    if (!company) {
-      return NextResponse.redirect(new URL('/onboarding', req.url));
+    if (company?.subscription_status === 'active') {
+      return NextResponse.redirect(new URL('/dashboard', req.url));
     }
-  }
-
-  // Agar onboarding complete kar diya → choose plan pe bhej do
-  if (session && pathname === '/onboarding') {
-    const { data: company } = await supabase
-      .from('companies')
-      .select('id')
-      .eq('owner_id', session.user.id)
-      .single();
-
-    if (company) {
-      return NextResponse.redirect(new URL('/billing/choose-plan', req.url));
+    if (!company && url.pathname !== '/signup/create-company') {
+      return NextResponse.redirect(new URL('/signup/create-company', req.url));
     }
   }
 
@@ -68,5 +37,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/login', '/onboarding', '/billing/:path*', '/app/:path*'],
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
 };
