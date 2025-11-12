@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, Suspense } from 'react';
+import { useState, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createClient } from '@/lib/supabase';
@@ -64,19 +64,16 @@ function CreateCompanyContent() {
         return;
       }
 
-      // DUPLICATE COMPANY CHECK — SABSE PEHLE!
+      // DUPLICATE COMPANY CHECK
       const { data: existingCompany, error: checkError } = await supabase
         .from('companies')
         .select('id, subscription_status')
-        .eq('owner_id', session.user.id)
+        .eq('user_id', session.user.id) // CHANGE TO owner_id IF NEEDED
         .maybeSingle();
 
-      if (checkError && checkError.code !== 'PGRST116') {
-        throw checkError;
-      }
+      if (checkError && checkError.code !== 'PGRST116') throw checkError;
 
       if (existingCompany) {
-        // Already has company → go to dashboard
         if (existingCompany.subscription_status === 'active') {
           router.replace('/dashboard');
         } else {
@@ -85,15 +82,16 @@ function CreateCompanyContent() {
         return;
       }
 
-      // Create new company
+      // INSERT COMPANY
       const { error } = await supabase.from('companies').insert([{
-        owner_id: session.user.id,
+        user_id: session.user.id, // CHANGE TO owner_id IF NEEDED
         company_name: companyName.trim(),
         legal_name: legalName.trim() || null,
         email: email.trim(),
         phone: phone.trim() || null,
         mc_number: mcNumber.trim() || null,
-        dot_number: regId.trim() || null,
+        dot_number: country === 'USA' ? regId.trim() || null : null,
+        cvor_number: country === 'Canada' ? regId.trim() || null : null,
         address: address.trim(),
         city: city.trim(),
         state: stateProv.trim(),
@@ -106,19 +104,16 @@ function CreateCompanyContent() {
       if (error) throw error;
 
       setOk(true);
-      setTimeout(() => router.push('/choose-plan'), 800);
+      setTimeout(() => {
+        router.refresh(); // REFRESH SESSION
+        router.push('/choose-plan');
+      }, 800);
     } catch (e: any) {
       setErr(e?.message || 'Failed to save company. Try again.');
     } finally {
       setLoading(false);
     }
   }
-
-  useEffect(() => {
-    if (inviteCode) {
-      console.log('Invite code detected:', inviteCode);
-    }
-  }, [inviteCode]);
 
   return (
     <div className="min-h-screen bg-white">
@@ -173,7 +168,7 @@ function CreateCompanyContent() {
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-neutral-800">
-                  Trade / Legal Name (optional)
+                  Trade / DBA Name (optional)
                 </label>
                 <input
                   value={legalName}
