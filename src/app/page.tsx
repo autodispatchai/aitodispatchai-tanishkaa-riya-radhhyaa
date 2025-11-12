@@ -1,8 +1,8 @@
-// src/app/page.tsx
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 import {
   ChevronRight,
   Menu,
@@ -13,6 +13,8 @@ import {
   Check,
   Info,
 } from 'lucide-react';
+
+import { createClient } from '@/lib/supabase';
 
 /* =========================================================
    PAGE
@@ -26,17 +28,50 @@ type Theme = {
 
 export default function LandingPage() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const router = useRouter();
 
-  // Client-side redirect to /dashboard if session + active subscription
+  // AUTO REDIRECT TO DASHBOARD IF LOGGED IN + ACTIVE SUBSCRIPTION
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const session = localStorage.getItem('autodispatch_session');
-      const subscription = localStorage.getItem('autodispatch_subscription');
-      if (session && subscription === 'active') {
-        window.location.href = '/dashboard';
+    const checkAuth = async () => {
+      const supabase = createClient();
+
+      // 1. Get current session from Supabase
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (session) {
+        // 2. Check if user has active subscription
+        const { data: company } = await supabase
+          .from('companies')
+          .select('subscription_status')
+          .eq('user_id', session.user.id)
+          .single();
+
+        if (company?.subscription_status === 'active') {
+          router.replace('/dashboard');
+          return;
+        }
       }
-    }
-  }, []);
+
+      // 3. Listen for Google login callback (OAuth fix)
+      const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (event === 'SIGNED_IN' && session) {
+          const { data: company } = await supabase
+            .from('companies')
+            .select('subscription_status')
+            .eq('user_id', session.user.id)
+            .single();
+
+          if (company?.subscription_status === 'active') {
+            router.replace('/dashboard');
+          }
+        }
+      });
+
+      return () => listener?.subscription?.unsubscribe();
+    };
+
+    checkAuth();
+  }, [router]);
 
   return (
     <div className="min-h-screen bg-white text-neutral-900">
