@@ -51,7 +51,7 @@ export default function SignupPage() {
         password: form.password,
         options: {
           data: { full_name: form.name.trim() },
-          // CLEAN URL + MAGIC LINK → Direct create-company
+          // MAGIC LINK → DIRECT /create-company
           emailRedirectTo: `${SITE_URL}/create-company`,
         },
       });
@@ -79,7 +79,7 @@ export default function SignupPage() {
       await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          // CLEAN URL → Direct create-company (no /onboarding)
+          // OAUTH → DIRECT /create-company (NO /onboarding, NO LOOP)
           redirectTo: `${SITE_URL}/create-company`,
           queryParams: {
             access_type: 'offline',

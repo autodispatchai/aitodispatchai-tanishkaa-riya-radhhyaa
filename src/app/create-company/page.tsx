@@ -1,4 +1,3 @@
-// src/app/create-company/page.tsx
 'use client';
 
 import { useState, useMemo, useEffect, Suspense } from 'react';
@@ -65,6 +64,28 @@ function CreateCompanyContent() {
         return;
       }
 
+      // DUPLICATE COMPANY CHECK — SABSE PEHLE!
+      const { data: existingCompany, error: checkError } = await supabase
+        .from('companies')
+        .select('id, subscription_status')
+        .eq('owner_id', session.user.id)
+        .maybeSingle();
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        throw checkError;
+      }
+
+      if (existingCompany) {
+        // Already has company → go to dashboard
+        if (existingCompany.subscription_status === 'active') {
+          router.replace('/dashboard');
+        } else {
+          router.replace('/choose-plan');
+        }
+        return;
+      }
+
+      // Create new company
       const { error } = await supabase.from('companies').insert([{
         owner_id: session.user.id,
         company_name: companyName.trim(),

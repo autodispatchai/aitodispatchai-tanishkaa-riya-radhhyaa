@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ChevronRight,
   Menu,
@@ -13,11 +13,10 @@ import {
   Check,
   Info,
 } from 'lucide-react';
-
 import { createClient } from '@/lib/supabase';
 
 /* =========================================================
-   PAGE
+   TYPES
 ========================================================= */
 type Theme = {
   border: string;
@@ -26,43 +25,70 @@ type Theme = {
   grad: string;
 };
 
+/* =========================================================
+   PAGE
+========================================================= */
 export default function LandingPage() {
-  const [mobileOpen, setMobileOpen] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
-  // AUTO REDIRECT TO DASHBOARD IF LOGGED IN + ACTIVE SUBSCRIPTION
+  // AUTO REDIRECT LOGIC
   useEffect(() => {
     const checkAuth = async () => {
       const supabase = createClient();
-
-      // 1. Get current session from Supabase
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session) {
-        // 2. Check if user has active subscription
         const { data: company } = await supabase
           .from('companies')
-          .select('subscription_status')
+          .select('id, subscription_status')
           .eq('user_id', session.user.id)
-          .single();
+          .maybeSingle();
 
         if (company?.subscription_status === 'active') {
           router.replace('/dashboard');
           return;
         }
+
+        if (!company) {
+          router.replace('/signup/create-company');
+          return;
+        }
       }
 
-      // 3. Listen for Google login callback (OAuth fix)
+      // OAuth callback code
+      const code = searchParams.get('code');
+      if (code) {
+        const { data: { session } } = await supabase.auth.exchangeCodeForSession(code);
+        if (session) {
+          const { data: company } = await supabase
+            .from('companies')
+            .select('subscription_status')
+            .eq('user_id', session.user.id)
+            .maybeSingle();
+
+          if (company?.subscription_status === 'active') {
+            router.replace('/dashboard');
+          } else {
+            router.replace('/signup/create-company');
+          }
+        }
+      }
+
+      // Real-time listener
       const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_IN' && session) {
           const { data: company } = await supabase
             .from('companies')
             .select('subscription_status')
             .eq('user_id', session.user.id)
-            .single();
+            .maybeSingle();
 
           if (company?.subscription_status === 'active') {
             router.replace('/dashboard');
+          } else {
+            router.replace('/signup/create-company');
           }
         }
       });
@@ -71,7 +97,7 @@ export default function LandingPage() {
     };
 
     checkAuth();
-  }, [router]);
+  }, [router, searchParams]);
 
   return (
     <div className="min-h-screen bg-white text-neutral-900">
