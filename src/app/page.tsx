@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -26,15 +26,12 @@ type Theme = {
 };
 
 /* =========================================================
-   PAGE
+   AUTH CHECKER COMPONENT (BAHAR)
 ========================================================= */
-export default function LandingPage() {
-  const router = useRouter();
+function AuthChecker({ router }: { router: any }) {
   const searchParams = useSearchParams();
-  const [mobileOpen, setMobileOpen] = useState(false);
 
-  // AUTO REDIRECT LOGIC
-  useEffect(() => {
+  React.useEffect(() => {
     const checkAuth = async () => {
       const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
@@ -50,14 +47,12 @@ export default function LandingPage() {
           router.replace('/dashboard');
           return;
         }
-
         if (!company) {
           router.replace('/signup/create-company');
           return;
         }
       }
 
-      // OAuth callback code
       const code = searchParams.get('code');
       if (code) {
         const { data: { session } } = await supabase.auth.exchangeCodeForSession(code);
@@ -76,7 +71,6 @@ export default function LandingPage() {
         }
       }
 
-      // Real-time listener
       const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === 'SIGNED_IN' && session) {
           const { data: company } = await supabase
@@ -99,8 +93,25 @@ export default function LandingPage() {
     checkAuth();
   }, [router, searchParams]);
 
+  return null;
+}
+
+/* =========================================================
+   PAGE
+========================================================= */
+export default function LandingPage() {
+  const router = useRouter();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // PURANA useEffect DELETE KAR DIYA
+
   return (
     <div className="min-h-screen bg-white text-neutral-900">
+      {/* AUTH CHECKER — SUSPENSE MEIN */}
+      <Suspense fallback={<div className="h-1 bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500"></div>}>
+        <AuthChecker router={router} />
+      </Suspense>
+
       {/* ================= HEADER ================= */}
       <Header mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
 
@@ -1004,7 +1015,7 @@ function SavingsStoryCarousel() {
             <div>
               <div className="mt-1 text-lg font-semibold">{slides[idx].title}</div>
               <ul className="mt-3 space-y-2 text-[15px] text-neutral-700">
-                {slides[idx].lines.map((l, i) => (
+                {slides[idx].lines.map((l: string, i: number) => (
                   <li key={i} className="flex items-start gap-2">
                     <span className="mt-1 h-2 w-2 rounded-full bg-gradient-to-r from-indigo-600 to-fuchsia-500" />
                     <span>{l}</span>
@@ -1018,7 +1029,7 @@ function SavingsStoryCarousel() {
 
       <div className="flex items-center justify-between px-4 py-3 bg-neutral-50/60">
         <div className="flex gap-2">
-          {slides.map((_, i) => (
+          {slides.map((_slide: any, i: number) => (
             <button
               key={i}
               onClick={() => setIdx(i)}
