@@ -208,15 +208,33 @@ function ChoosePlanContent() {
         }),
       });
 
+      // Check response status first
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('[choose-plan] ❌ API Error:', {
+          status: res.status,
+          error: errorData?.error,
+          fullResponse: errorData,
+        });
+        alert(errorData?.error || `Error ${res.status}: Please try again.`);
+        setLoading(false);
+        return;
+      }
+
       const data = await res.json();
-      console.log('[choose-plan] Full API Response:', data);
+      console.log('[choose-plan] ✅ Full API Response:', data);
 
       if (data.url) {
-        console.log('Valid Stripe URL received:', data.url);
-        window.location.href = data.url; // ye sabse reliable hai
+        console.log('[choose-plan] ✅ Valid Stripe URL received:', data.url);
+        // Clear loading state before redirect
+        setLoading(false);
+        // Small delay to ensure state updates
+        setTimeout(() => {
+          window.location.href = data.url;
+        }, 100);
       } else {
-        console.error('[choose-plan] No URL in response:', data);
-        alert(data?.error || 'Payment setup error. Check console.');
+        console.error('[choose-plan] ❌ No URL in response:', data);
+        alert(data?.error || 'Payment setup error. Check console for details.');
         setLoading(false);
       }
     } catch (err) {
