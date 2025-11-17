@@ -17,6 +17,7 @@ function BillingContent() {
   const [billing, setBilling] = useState<BillingCycle>('monthly');
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [checkoutTriggered, setCheckoutTriggered] = useState(false);
 
   useEffect(() => {
     // Load plan from URL param or localStorage
@@ -40,6 +41,24 @@ function BillingContent() {
       }
     }
   }, [planParam]);
+
+  // Auto-redirect to Stripe checkout when plan is in URL (only once)
+  useEffect(() => {
+    if (plan && plan !== 'ENTERPRISE' && !loading && !checkoutTriggered && planParam) {
+      const supabase = createClient();
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          setCheckoutTriggered(true);
+          // Auto-trigger checkout immediately
+          handleCheckout();
+        } else {
+          // Not logged in → redirect to login
+          router.push('/login');
+        }
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan, planParam, loading, checkoutTriggered]);
 
 
   async function handleCheckout() {
@@ -97,6 +116,44 @@ function BillingContent() {
     }
   }
 
+  // Show loading state while redirecting to Stripe
+  if (loading || (checkoutTriggered && plan && plan !== 'ENTERPRISE')) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-purple-600 mx-auto mb-4" />
+          <p className="text-lg font-medium text-neutral-900">Redirecting to checkout...</p>
+          <p className="text-sm text-neutral-600 mt-2">Please wait</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Enterprise plan → show Calendly link
+  if (plan === 'ENTERPRISE') {
+    return (
+      <div className="min-h-screen bg-white text-neutral-900">
+        <div className="h-[3px] w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500" />
+        <main className="max-w-2xl mx-auto px-4 py-16">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold tracking-tight">Enterprise Plan</h1>
+            <p className="mt-2 text-neutral-600">Contact our team for custom pricing.</p>
+          </div>
+          <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm p-8 text-center">
+            <a
+              href="https://calendly.com/autodispatchai/enterprise?utm_source=website&utm_medium=billing"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-block px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500 text-white font-semibold hover:opacity-90 transition-opacity"
+            >
+              Book a Demo
+            </a>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-white text-neutral-900">
       <div className="h-[3px] w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500" />
@@ -107,38 +164,6 @@ function BillingContent() {
         </div>
 
         <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm p-8">
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-neutral-600">Selected Plan</span>
-              <span className="text-lg font-bold">{plan}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-neutral-600">Billing Cycle</span>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setBilling('monthly')}
-                  className={`px-3 py-1 rounded-lg text-sm font-medium transition ${
-                    billing === 'monthly'
-                      ? 'bg-neutral-900 text-white'
-                      : 'text-neutral-700 hover:bg-neutral-100'
-                  }`}
-                >
-                  Monthly
-                </button>
-                <button
-                  onClick={() => setBilling('yearly')}
-                  className={`px-3 py-1 rounded-lg text-sm font-medium transition ${
-                    billing === 'yearly'
-                      ? 'bg-neutral-900 text-white'
-                      : 'text-neutral-700 hover:bg-neutral-100'
-                  }`}
-                >
-                  Yearly
-                </button>
-              </div>
-            </div>
-          </div>
-
           {err && (
             <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {err}
