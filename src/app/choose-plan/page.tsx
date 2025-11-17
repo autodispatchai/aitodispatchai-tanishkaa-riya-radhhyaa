@@ -133,7 +133,6 @@ function ChoosePlanContent() {
     }
     return {};
   });
-  const [loading, setLoading] = useState(false);
 
   const plan = useMemo(() => PLANS.find(p => p.name === selectedPlan)!, [selectedPlan]);
   const isEnterprise = plan.monthly == null;
