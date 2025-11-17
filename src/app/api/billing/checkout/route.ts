@@ -11,7 +11,7 @@ if (!STRIPE_SECRET_KEY) {
   console.error('[billing/checkout] ❌ STRIPE_SECRET_KEY missing in environment variables');
 }
 
-const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2024-12-18.acacia' }) : null;
+const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2025-10-29.clover' }) : null;
 
 // Base URL
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://autodispatchai.com';
@@ -120,7 +120,7 @@ export async function POST(request: Request) {
       );
     }
 
-    console.log('[billing/checkout] ✅ Base plan price ID:', basePriceKey, '=', basePriceId.substring(0, 20) + '...');
+    console.log('[billing/checkout] ✅ Base plan price ID:', planPriceKey, '=', basePriceId.substring(0, 20) + '...');
 
     // 8. Build line items
     const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
