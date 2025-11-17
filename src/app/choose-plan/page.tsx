@@ -210,7 +210,7 @@ function ChoosePlanContent() {
       const chosenAddOnIds = Object.keys(selectedAddOns).filter(k => selectedAddOns[k]);
 
       // Create Stripe checkout session directly
-      const res = await fetch('/api/stripe/checkout', {
+      const res = await fetch('/api/billing/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
