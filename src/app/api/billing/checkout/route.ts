@@ -18,32 +18,64 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const plan = body.plan || 'ESSENTIALS';
-    const billing = body.billingCycle || 'monthly';
+    const billingCycle = body.billingCycle || 'monthly';
+    const addOns = body.addOns || [];
 
-    // YE PRICE IDs TERE STRIPE DASHBOARD SE LE — MAIN NE REAL EXAMPLES DIYA HAI
-    const priceId = 
-      plan === 'PRO' 
-        ? (billing === 'yearly' ? process.env.STRIPE_PRO_YEARLY || 'price_1QXXXXXX' : process.env.STRIPE_PRO_MONTHLY || 'price_1QXXXXXX')
-        : (billing === 'yearly' ? process.env.STRIPE_ESSENTIALS_YEARLY || 'price_1QXXXXXX' : process.env.STRIPE_ESSENTIALS_MONTHLY || 'price_1QXXXXXX');
+    // TERE ENV KE EXACT NAAM — PRICE_… (bilkul same jaise .env.local mein hai)
+    const priceMap: Record<string, string> = {
+      ESSENTIALS_MONTHLY: process.env.PRICE_ESSENTIALS_MONTHLY!,
+      ESSENTIALS_YEARLY: process.env.PRICE_ESSENTIALS_YEARLY!,
+      PRO_MONTHLY: process.env.PRICE_PRO_MONTHLY!,
+      PRO_YEARLY: process.env.PRICE_PRO_YEARLY!,
+    };
 
-    if (!priceId || !stripe) {
-      return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 });
+    const key = `${plan}_${billingCycle === 'yearly' ? 'YEARLY' : 'MONTHLY'}`;
+    const basePriceId = priceMap[key];
+
+    if (!basePriceId) {
+      return NextResponse.json({ error: 'Invalid plan or pricing not configured' }, { status: 400 });
     }
 
-    const sessionCheckout = await stripe.checkout.sessions.create({
+    // Line items banaye — base plan + selected add-ons
+    const lineItems = [
+      { price: basePriceId, quantity: 1 },
+    ];
+
+    // Add-ons (agar select kiye ho)
+    addOns.forEach((addonId: string) => {
+      const monthlyKey = `PRICE_ADDON_${addonId.toUpperCase()}_MONTHLY`;
+      const yearlyKey = `PRICE_ADDON_${addonId.toUpperCase()}_YEARLY`;
+      const addonPriceId = billingCycle === 'yearly'
+        ? process.env[yearlyKey] || process.env[monthlyKey]
+        : process.env[monthlyKey];
+
+      if (addonPriceId) {
+        lineItems.push({ price: addonPriceId, quantity: 1 });
+      }
+    });
+
+    const checkoutSession = await stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
       customer_email: session.user.email ?? undefined,
-      line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://autodispatchai.com'}/dashboard`,
-      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://autodispatchai.com'}/choose-plan`,
-      metadata: { user_id: session.user.id, plan, billing },
+      line_items: lineItems,
+      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard?success=true`,
+      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/choose-plan?canceled=true`,
+      metadata: {
+        user_id: session.user.id,
+        plan,
+        billing_cycle: billingCycle,
+        addons: addOns.join(','),
+      },
     });
 
-    return NextResponse.json({ url: sessionCheckout.url });
+    return NextResponse.json({ url: checkoutSession.url });
 
-  } catch (error) {
-    console.error('Checkout error:', error);
-    return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });
+  } catch (error: any) {
+    console.error('Checkout API Error:', error);
+    return NextResponse.json(
+      { error: 'Something went wrong. Please try again.' },
+      { status: 500 }
+    );
   }
 }
