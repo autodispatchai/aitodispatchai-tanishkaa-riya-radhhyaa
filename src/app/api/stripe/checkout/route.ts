@@ -76,15 +76,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 💰 Decide priceId based on plan + billingCycle
-    // TODO: Replace with your real Stripe price IDs from Stripe Dashboard
-    // Get these from: Stripe Dashboard → Products → Your Product → Pricing
+    // 💰 Get priceId from environment variables
     const priceMap: Record<string, string> = {
-      // Add your Stripe price IDs here:
-      // 'ESSENTIALS_monthly': 'price_xxxxxxxxxxxxx',
-      // 'ESSENTIALS_yearly': 'price_xxxxxxxxxxxxx',
-      // 'PRO_monthly': 'price_xxxxxxxxxxxxx',
-      // 'PRO_yearly': 'price_xxxxxxxxxxxxx',
+      'ESSENTIALS_monthly': process.env.PRICE_ESSENTIALS_MONTHLY || '',
+      'ESSENTIALS_yearly': process.env.PRICE_ESSENTIALS_YEARLY || '',
+      'PRO_monthly': process.env.PRICE_PRO_MONTHLY || '',
+      'PRO_yearly': process.env.PRICE_PRO_YEARLY || '',
     };
 
     const key = `${plan}_${billingCycle}`;
@@ -92,25 +89,73 @@ export async function POST(req: NextRequest) {
 
     if (!priceId) {
       console.error('[checkout] Missing Stripe price ID for:', key);
-      console.error('[checkout] Please add price IDs to priceMap in src/app/api/stripe/checkout/route.ts');
+      console.error('[checkout] Available env vars:', Object.keys(priceMap).filter(k => priceMap[k]));
       return NextResponse.json(
         { 
-          error: `Stripe price ID not configured for ${plan} (${billingCycle}). Please contact support or configure price IDs.` 
+          error: `Stripe price ID not configured for ${plan} (${billingCycle}). Please set PRICE_${plan}_${billingCycle.toUpperCase()} in environment variables.` 
         },
         { status: 400 }
       );
+    }
+
+    // Build line items: base plan + add-ons
+    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
+      {
+        price: priceId,
+        quantity: 1,
+      },
+    ];
+
+    // Add add-ons if selected
+    if (addOns.length > 0) {
+      const addOnPriceMap: Record<string, string> = {
+        'city': billingCycle === 'monthly' 
+          ? (process.env.PRICE_ADDON_CITY_MONTHLY || '')
+          : (process.env.PRICE_ADDON_CITY_YEARLY || ''),
+        'highway': billingCycle === 'monthly'
+          ? (process.env.PRICE_ADDON_HIGHWAY_MONTHLY || '')
+          : (process.env.PRICE_ADDON_HIGHWAY_YEARLY || ''),
+        'bestfinder': billingCycle === 'monthly'
+          ? (process.env.PRICE_ADDON_BESTFINDER_MONTHLY || '')
+          : (process.env.PRICE_ADDON_BESTFINDER_YEARLY || ''),
+        'safety': billingCycle === 'monthly'
+          ? (process.env.PRICE_ADDON_SAFETY_MONTHLY || '')
+          : (process.env.PRICE_ADDON_SAFETY_YEARLY || ''),
+        'cb': billingCycle === 'monthly'
+          ? (process.env.PRICE_ADDON_CB_MONTHLY || '')
+          : (process.env.PRICE_ADDON_CB_YEARLY || ''),
+        'voice': billingCycle === 'monthly'
+          ? (process.env.PRICE_ADDON_VOICE_MONTHLY || '')
+          : (process.env.PRICE_ADDON_VOICE_YEARLY || ''),
+        'agent': billingCycle === 'monthly'
+          ? (process.env.PRICE_ADDON_AGENT_MONTHLY || '')
+          : (process.env.PRICE_ADDON_AGENT_YEARLY || ''),
+        'pay': billingCycle === 'monthly'
+          ? (process.env.PRICE_ADDON_PAY_MONTHLY || '')
+          : (process.env.PRICE_ADDON_PAY_YEARLY || ''),
+        'score': billingCycle === 'monthly'
+          ? (process.env.PRICE_ADDON_SCORE_MONTHLY || '')
+          : (process.env.PRICE_ADDON_SCORE_YEARLY || ''),
+      };
+
+      for (const addOnId of addOns) {
+        const addOnPriceId = addOnPriceMap[addOnId];
+        if (addOnPriceId) {
+          lineItems.push({
+            price: addOnPriceId,
+            quantity: 1,
+          });
+        } else {
+          console.warn(`[checkout] Add-on price ID not found for: ${addOnId}`);
+        }
+      }
     }
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
       customer_email: user.email ?? undefined,
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
-      ],
+      line_items: lineItems,
       metadata: {
         user_id: user.id,
         plan,
