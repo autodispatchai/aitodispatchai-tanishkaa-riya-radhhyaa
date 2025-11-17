@@ -212,26 +212,62 @@ function ChoosePlanContent() {
         }),
       });
 
-      const json = await res.json();
-
-      console.log('[choose-plan] API Response:', { ok: res.ok, hasUrl: !!json?.url, error: json?.error });
-
-      if (!res.ok || !json?.url) {
-        const errorMsg = json?.error || 'Payment failed. Please try again.';
-        console.error('[choose-plan] Checkout failed:', errorMsg);
+      // Check response status first
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+        const errorMsg = errorData?.error || `HTTP ${res.status}: ${res.statusText}`;
+        console.error('[choose-plan] ❌ API Error:', {
+          status: res.status,
+          statusText: res.statusText,
+          error: errorMsg,
+        });
         alert(errorMsg);
         setLoading(false);
         return;
       }
 
-      console.log('[choose-plan] ✅ Redirecting to Stripe:', json.url);
+      const json = await res.json();
+      console.log('[choose-plan] 📦 Full API Response:', json);
+
+      if (!json?.url) {
+        console.error('[choose-plan] ❌ No URL in response:', json);
+        alert(json?.error || 'Payment failed. No checkout URL received.');
+        setLoading(false);
+        return;
+      }
+
+      // Validate URL
+      if (!json.url.startsWith('https://')) {
+        console.error('[choose-plan] ❌ Invalid URL format:', json.url);
+        alert('Invalid checkout URL. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      console.log('[choose-plan] ✅ Valid Stripe URL received:', json.url);
+      console.log('[choose-plan] 🔄 Attempting redirect...');
       
       localStorage.removeItem('autodispatch_selected_plan');
       localStorage.removeItem('autodispatch_billing');
       localStorage.removeItem('autodispatch_addons');
       
-      // Force redirect to Stripe
-      window.location.href = json.url;
+      // Try multiple redirect methods
+      try {
+        // Method 1: Direct href (most reliable)
+        window.location.href = json.url;
+        
+        // Fallback: If redirect doesn't happen in 1 second, try window.open
+        setTimeout(() => {
+          if (document.hasFocus()) {
+            console.warn('[choose-plan] ⚠️ Redirect may have failed, trying window.open...');
+            window.open(json.url, '_blank');
+          }
+        }, 1000);
+      } catch (redirectError) {
+        console.error('[choose-plan] ❌ Redirect error:', redirectError);
+        // Last resort: window.open in new tab
+        window.open(json.url, '_blank');
+      }
     } catch (error) {
       console.error('Checkout error:', error);
       alert('Network error. Please try again.');

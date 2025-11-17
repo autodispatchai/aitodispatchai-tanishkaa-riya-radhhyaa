@@ -160,16 +160,27 @@ export async function POST(request: Request) {
 
     if (!checkoutSession.url) {
       console.error('[billing/checkout] ❌ No checkout URL from Stripe');
+      console.error('[billing/checkout] Session object:', JSON.stringify(checkoutSession, null, 2));
       return NextResponse.json(
-        { error: 'Failed to create checkout session' },
+        { error: 'Failed to create checkout session. No URL returned from Stripe.' },
         { status: 500 }
       );
     }
 
+    // Validate URL
+    if (!checkoutSession.url.startsWith('https://checkout.stripe.com')) {
+      console.error('[billing/checkout] ⚠️ Unexpected URL format:', checkoutSession.url);
+    }
+
     console.log('[billing/checkout] ✅ Success! URL:', checkoutSession.url);
+    console.log('[billing/checkout] Session ID:', checkoutSession.id);
     console.log('[billing/checkout] ========== REQUEST END ==========');
 
-    return NextResponse.json({ url: checkoutSession.url });
+    // Return URL with additional debugging info in development
+    return NextResponse.json({ 
+      url: checkoutSession.url,
+      sessionId: checkoutSession.id,
+    });
 
   } catch (error: any) {
     console.error('[billing/checkout] ❌ ERROR:', error?.message);
