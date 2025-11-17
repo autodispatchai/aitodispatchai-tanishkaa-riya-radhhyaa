@@ -30,13 +30,22 @@ export async function POST(req: NextRequest) {
     // 🔐 Supabase user from cookies (must be logged in)
     const cookieStore = await cookies(); // 👈 Next 15/16: cookies() is async
     
+    // Also read cookies from request headers as fallback
+    const requestCookies = req.headers.get('cookie') || '';
+    
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
           get(name: string) {
-            return cookieStore.get(name)?.value;
+            // Try cookieStore first, then request headers
+            const cookieValue = cookieStore.get(name)?.value;
+            if (cookieValue) return cookieValue;
+            
+            // Fallback: parse from request cookie header
+            const match = requestCookies.match(new RegExp(`(^| )${name}=([^;]+)`));
+            return match ? match[2] : undefined;
           },
           // No-ops for API routes; Supabase client requires these functions
           set: () => {},
@@ -47,11 +56,20 @@ export async function POST(req: NextRequest) {
 
     const {
       data: { user },
+      error: authError,
     } = await supabase.auth.getUser();
 
+    if (authError) {
+      console.error('[checkout] Auth error:', authError);
+    }
+
     if (!user) {
+      // Debug: log available cookies
+      const allCookies = cookieStore.getAll();
+      console.error('[checkout] No user found. Available cookies:', allCookies.map(c => c.name));
+      console.error('[checkout] Request cookie header:', requestCookies ? 'present' : 'missing');
       return NextResponse.json(
-        { error: 'Not authenticated' },
+        { error: 'Not authenticated. Please log in again.' },
         { status: 401 }
       );
     }
