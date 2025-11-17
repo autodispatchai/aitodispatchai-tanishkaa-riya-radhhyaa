@@ -1,52 +1,45 @@
-// src/app/layout.tsx
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Inter, Roboto_Mono } from 'next/font/google';
 import './globals.css';
+import CookieConsent from '@/components/CookieConsent';
+import Footer from '@/components/Footer';
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
-});
+const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
+const mono = Roboto_Mono({ subsets: ['latin'], variable: '--font-mono' });
 
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
-});
-
-// ===== SEO METADATA (Canada + AutoDispatchAI) =====
 export const metadata: Metadata = {
-  title: 'AutoDispatchAI — AI Dispatch Automation for Fleets (Canada & US)',
-  description: '24/7 AI dispatcher that reads emails, finds loads, negotiates, tracks drivers. Human-in-the-loop. Start 14-day trial.',
-  keywords: 'AI dispatch, trucking automation, load board, Samsara, Gmail dispatch, cross-border, eManifest, Canada trucking',
-  metadataBase: new URL('https://autodispatchai.com'),
-  alternates: {
-    canonical: '/',
-    languages: {
-      'en-CA': '/',
-    },
+  title: {
+    default: 'AutoDispatchAI — AI Dispatch Automation for Fleets (Canada & US)',
+    template: '%s — AutoDispatchAI',
   },
+  description: 'Your 24/7 digital dispatcher. Finds loads, negotiates, tracks, and notifies — built for cross-border carriers.',
+  metadataBase: new URL('https://autodispatchai.com'),
+  keywords: ['AI dispatch', 'trucking automation', 'load board', 'fleet management', 'cross-border logistics'],
+  authors: [{ name: 'AutoDispatchAI' }],
+  creator: 'AutoDispatchAI',
+  publisher: 'AutoDispatchAI Inc.',
   openGraph: {
-    title: 'AutoDispatchAI — Your Dispatcher Never Sleeps',
-    description: 'AI automation for trucking fleets. Save 30–50% planner time. Up to 80% workflows automated.',
+    type: 'website',
+    locale: 'en_US',
     url: 'https://autodispatchai.com',
     siteName: 'AutoDispatchAI',
+    title: 'AutoDispatchAI — Your Dispatcher Never Sleeps',
+    description: 'AI dispatch automation for modern fleets. 24/7 digital dispatcher that finds loads, negotiates, tracks, and notifies.',
     images: [
       {
-        url: '/og-image.jpg', // public/og-image.jpg
+        url: '/og.png',
         width: 1200,
         height: 630,
-        alt: 'AutoDispatchAI — AI Dispatch Dashboard',
+        alt: 'AutoDispatchAI',
       },
     ],
-    locale: 'en_CA',
-    type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AutoDispatchAI — AI Dispatch for Fleets',
-    description: 'Never miss a load. AI reads, matches, negotiates — you approve.',
-    images: ['/og-image.jpg'],
-    creator: '@AutoDispatchAI',
+    title: 'AutoDispatchAI',
+    description: 'Your dispatcher never sleeps. Neither should your profits.',
+    images: ['/og.png'],
+    creator: '@autodispatchai',
   },
   robots: {
     index: true,
@@ -59,29 +52,40 @@ export const metadata: Metadata = {
       'max-snippet': -1,
     },
   },
-  verification: {
-    google: 'your-google-site-verification-code', // Optional
-  },
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
-    <html lang="en-CA">
+    <html lang="en" className={`${inter.variable} ${mono.variable}`}>
       <head>
-        {/* Favicon (Optional) */}
-        <link rel="icon" href="/favicon.ico" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-        <link rel="manifest" href="/site.webmanifest" />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'Organization',
+              name: 'AutoDispatchAI',
+              url: 'https://autodispatchai.vercel.app',
+              logo: 'https://autodispatchai.vercel.app/logo.png',
+              founder: [
+                { '@type': 'Person', name: 'Deepak Sidhu', jobTitle: 'CEO & Founder' },
+                { '@type': 'Person', name: 'Danny Singh', jobTitle: 'Co-Founder & Operations' },
+                { '@type': 'Person', name: 'Komal Sidhu', jobTitle: 'Co-Founder & Tech/AI' },
+              ],
+            }),
+          }}
+        />
       </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className="font-sans antialiased bg-white text-neutral-900">
         {children}
+        <Footer />
+        <CookieConsent />
       </body>
     </html>
   );
 }
+// ...existing code...

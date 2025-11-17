@@ -1,20 +1,38 @@
-// src/types/supabase.ts (FINAL ✅)
+// src/types/supabase.ts
 export type Json =
   | string
   | number
   | boolean
   | null
   | { [key: string]: Json | undefined }
-  | Json[];
+  | Json[]
 
 export interface Database {
   public: {
     Tables: {
-      // Tuhade actual tables (jaise loads, users) baad vich add karo. Hun ke liye empty rakh do.
-      [key: string]: any;
-    };
-    Views: { [key: string]: any };
-    Functions: { [key: string]: any };
-    Enums: { [key: string]: any };
-  };
+      companies: {
+        Row: {
+          id: string
+          user_id: string
+          name: string | null
+          subscription_status: 'active' | 'trialing' | 'canceled' | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name?: string | null
+          subscription_status?: 'active' | 'trialing' | 'canceled' | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string | null
+          subscription_status?: 'active' | 'trialing' | 'canceled' | null
+          created_at?: string
+        }
+      }
+    }
+  }
 }

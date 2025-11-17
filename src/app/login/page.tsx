@@ -23,16 +23,54 @@ export default function LoginPage() {
     const supabase = createClient();
 
     // Check session on mount
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session) {
-        window.location.href = '/app/dashboard';
+        // Check if user has a company and subscription
+        const { data: company } = await supabase
+          .from('companies')
+          .select('subscription_status')
+          .eq('user_id', session.user.id)
+          .maybeSingle();
+
+        if (company?.subscription_status === 'active') {
+          window.location.href = '/dashboard';
+        } else {
+          // Check for stored plan and redirect to billing
+          const storedPlan = typeof window !== 'undefined'
+            ? localStorage.getItem('autodispatch_selected_plan')
+            : null;
+          if (storedPlan) {
+            window.location.href = `/billing?plan=${storedPlan.toLowerCase()}`;
+          } else {
+            window.location.href = '/choose-plan';
+          }
+        }
       }
     });
 
     // Listen for auth changes (OAuth callback ke liye)
-    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
-        window.location.href = '/app/dashboard';
+        // Check if user has a company and subscription
+        const { data: company } = await supabase
+          .from('companies')
+          .select('subscription_status')
+          .eq('user_id', session.user.id)
+          .maybeSingle();
+
+        if (company?.subscription_status === 'active') {
+          window.location.href = '/dashboard';
+        } else {
+          // Check for stored plan and redirect to billing
+          const storedPlan = typeof window !== 'undefined'
+            ? localStorage.getItem('autodispatch_selected_plan')
+            : null;
+          if (storedPlan) {
+            window.location.href = `/billing?plan=${storedPlan.toLowerCase()}`;
+          } else {
+            window.location.href = '/choose-plan';
+          }
+        }
       }
     });
 
@@ -78,7 +116,26 @@ export default function LoginPage() {
       if (remember) localStorage.setItem(REMEMBER_KEY, form.email.trim());
       else localStorage.removeItem(REMEMBER_KEY);
 
-      window.location.href = '/app/dashboard';
+      // Check if user has a company and subscription
+      const { data: company } = await supabase
+        .from('companies')
+        .select('subscription_status')
+        .eq('user_id', (await supabase.auth.getUser()).data.user!.id)
+        .maybeSingle();
+
+      if (company?.subscription_status === 'active') {
+        window.location.href = '/dashboard';
+      } else {
+        // Check for stored plan and redirect to billing
+        const storedPlan = typeof window !== 'undefined'
+          ? localStorage.getItem('autodispatch_selected_plan')
+          : null;
+        if (storedPlan) {
+          window.location.href = `/billing?plan=${storedPlan.toLowerCase()}`;
+        } else {
+          window.location.href = '/choose-plan';
+        }
+      }
     } catch (e: any) {
       setErr(
         (e?.message ?? 'Login failed.') +

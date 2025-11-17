@@ -1,24 +1,37 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://autodispatchai.com';
 
 type Form = { name: string; email: string; password: string };
 type OAuthProvider = 'google' | 'azure';
 
-export default function SignupPage() {
+function SignupContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const planParam = searchParams.get('plan');
+  
   const [form, setForm] = useState<Form>({ name: '', email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
+
+  // Store plan in localStorage if provided
+  useEffect(() => {
+    if (planParam && typeof window !== 'undefined') {
+      const planUpper = planParam.toUpperCase();
+      if (['ESSENTIALS', 'PRO', 'ENTERPRISE'].includes(planUpper)) {
+        localStorage.setItem('autodispatch_selected_plan', planUpper);
+      }
+    }
+  }, [planParam]);
 
   const issues = useMemo(() => {
     const m: string[] = [];
@@ -46,13 +59,16 @@ export default function SignupPage() {
     try {
       const supabase = createClient();
 
+      const redirectUrl = planParam 
+        ? `${SITE_URL}/signup/create-company?plan=${planParam}`
+        : `${SITE_URL}/signup/create-company`;
+
       const { error } = await supabase.auth.signUp({
         email: form.email.trim(),
         password: form.password,
         options: {
           data: { full_name: form.name.trim() },
-          // MAGIC LINK → DIRECT /create-company
-          emailRedirectTo: `${SITE_URL}/create-company`,
+          emailRedirectTo: redirectUrl,
         },
       });
 
@@ -76,11 +92,14 @@ export default function SignupPage() {
 
       const supabase = createClient();
 
+      const redirectUrl = planParam 
+        ? `${SITE_URL}/signup/create-company?plan=${planParam}`
+        : `${SITE_URL}/signup/create-company`;
+
       await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          // OAUTH → DIRECT /create-company (NO /onboarding, NO LOOP)
-          redirectTo: `${SITE_URL}/create-company`,
+          redirectTo: redirectUrl,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
@@ -113,7 +132,7 @@ export default function SignupPage() {
           </span>
         </div>
         <p className="mt-2 text-center text-sm text-neutral-500">
-          Create your account to get started
+          {planParam ? `You've selected the ${planParam.toUpperCase()} plan. Create your account to continue.` : 'Create your account to get started'}
         </p>
 
         {/* OAuth */}
@@ -237,5 +256,20 @@ export default function SignupPage() {
         </p>
       </motion.div>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-purple-600 mx-auto mb-4"></div>
+          <p className="text-xl font-medium">Loading...</p>
+        </div>
+      </div>
+    }>
+      <SignupContent />
+    </Suspense>
   );
 }

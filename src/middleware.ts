@@ -10,8 +10,8 @@ export async function middleware(req: NextRequest) {
 
   const url = req.nextUrl;
 
-  // PROTECTED ROUTES
-  if (url.pathname.startsWith('/dashboard') || url.pathname.startsWith('/choose-plan')) {
+  // PROTECTED ROUTES (only dashboard requires auth)
+  if (url.pathname.startsWith('/dashboard')) {
     if (!session) {
       return NextResponse.redirect(new URL('/login', req.url));
     }

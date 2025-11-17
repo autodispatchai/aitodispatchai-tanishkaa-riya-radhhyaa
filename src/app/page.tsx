@@ -1,12 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect, useMemo, useRef, Suspense, lazy } from 'react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ChevronRight,
-  Menu,
-  X,
   Lock,
   Shield,
   Truck,
@@ -14,6 +12,7 @@ import {
   Info,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase';
+import Navbar from '@/components/Navbar';
 
 /* =========================================================
    TYPES
@@ -26,72 +25,88 @@ type Theme = {
 };
 
 /* =========================================================
-   AUTH CHECKER COMPONENT (BAHAR)
+   AUTH CHECKER COMPONENT (FIXED: loading state + no redirect loops)
 ========================================================= */
 function AuthChecker({ router }: { router: any }) {
   const searchParams = useSearchParams();
+  const [loading, setLoading] = useState(true);
+  const checkedRef = useRef(false);
 
   React.useEffect(() => {
+    if (checkedRef.current) return;
+    
     const checkAuth = async () => {
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
+      try {
+        checkedRef.current = true;
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
 
-      if (session) {
-        const { data: company } = await supabase
-          .from('companies')
-          .select('id, subscription_status')
-          .eq('user_id', session.user.id)
-          .maybeSingle();
-
-        if (company?.subscription_status === 'active') {
-          router.replace('/dashboard');
-          return;
-        }
-        if (!company) {
-          router.replace('/signup/create-company');
-          return;
-        }
-      }
-
-      const code = searchParams.get('code');
-      if (code) {
-        const { data: { session } } = await supabase.auth.exchangeCodeForSession(code);
         if (session) {
           const { data: company } = await supabase
             .from('companies')
-            .select('subscription_status')
+            .select('id, subscription_status')
             .eq('user_id', session.user.id)
             .maybeSingle();
 
           if (company?.subscription_status === 'active') {
             router.replace('/dashboard');
-          } else {
+            return;
+          }
+          if (!company) {
             router.replace('/signup/create-company');
+            return;
           }
         }
+
+        const code = searchParams.get('code');
+        if (code) {
+          const { data: { session: newSession } } = await supabase.auth.exchangeCodeForSession(code);
+          if (newSession) {
+            const { data: company } = await supabase
+              .from('companies')
+              .select('subscription_status')
+              .eq('user_id', newSession.user.id)
+              .maybeSingle();
+
+            if (company?.subscription_status === 'active') {
+              router.replace('/dashboard');
+            } else {
+              router.replace('/signup/create-company');
+            }
+          }
+        }
+
+        const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
+          if (event === 'SIGNED_IN' && session && !checkedRef.current) {
+            checkedRef.current = true;
+            const { data: company } = await supabase
+              .from('companies')
+              .select('subscription_status')
+              .eq('user_id', session.user.id)
+              .maybeSingle();
+
+            if (company?.subscription_status === 'active') {
+              router.replace('/dashboard');
+            } else {
+              router.replace('/signup/create-company');
+            }
+          }
+        });
+
+        return () => {
+          listener?.subscription?.unsubscribe();
+        };
+      } finally {
+        setLoading(false);
       }
-
-      const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_IN' && session) {
-          const { data: company } = await supabase
-            .from('companies')
-            .select('subscription_status')
-            .eq('user_id', session.user.id)
-            .maybeSingle();
-
-          if (company?.subscription_status === 'active') {
-            router.replace('/dashboard');
-          } else {
-            router.replace('/signup/create-company');
-          }
-        }
-      });
-
-      return () => listener?.subscription?.unsubscribe();
     };
 
     checkAuth();
   }, [router, searchParams]);
+
+  if (loading) {
+    return <div className="h-1 bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500"></div>;
+  }
 
   return null;
 }
@@ -101,9 +116,7 @@ function AuthChecker({ router }: { router: any }) {
 ========================================================= */
 export default function LandingPage() {
   const router = useRouter();
-  const [mobileOpen, setMobileOpen] = useState(false);
-
-  // PURANA useEffect DELETE KAR DIYA
+  const prefersReducedMotion = useReducedMotion();
 
   return (
     <div className="min-h-screen bg-white text-neutral-900">
@@ -113,7 +126,7 @@ export default function LandingPage() {
       </Suspense>
 
       {/* ================= HEADER ================= */}
-      <Header mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
+      <Navbar />
 
       {/* ================= HERO ================= */}
       <section className="py-24 text-center px-4">
@@ -256,11 +269,11 @@ export default function LandingPage() {
 
               <div className="mt-6">
                 <a
-                  href="#team"
+                  href="/about-us"
                   className="inline-flex items-center gap-2 px-5 py-3 rounded-xl border border-neutral-300 text-neutral-800 hover:bg-neutral-50"
-                  aria-label="Book a 15-minute demo"
+                  aria-label="About Us"
                 >
-                  Book a 15-minute demo
+                  About Us
                 </a>
               </div>
             </div>
@@ -312,7 +325,7 @@ export default function LandingPage() {
       </section>
 
       {/* ================= HUMAN + AI LOOP ================= */}
-      <section id="loop" className="py-20 px-4 bg-neutral-50">
+      <section id="how-it-works" className="py-20 px-4 bg-neutral-50">
         <div className="max-w-6xl mx-auto">
           <div className="text-center max-w-3xl mx-auto">
             <h2 className="text-3xl font-bold tracking-tight">Human + AI, one continuous loop</h2>
@@ -327,9 +340,9 @@ export default function LandingPage() {
             ].map((s, i) => (
               <motion.div
                 key={s.n}
-                initial={{ opacity: 0, y: 12 }}
+                initial={{ opacity: 0, y: prefersReducedMotion ? 0 : 12 }}
                 whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.35, delay: i * 0.05 }}
+                transition={{ duration: prefersReducedMotion ? 0 : 0.35, delay: prefersReducedMotion ? 0 : i * 0.05 }}
                 viewport={{ once: true }}
                 className="rounded-2xl border border-neutral-200 p-5 bg-white"
               >
@@ -343,7 +356,7 @@ export default function LandingPage() {
       </section>
 
       {/* ================= FOUR STEPS ================= */}
-      <section id="steps" className="py-16 px-4">
+      <section id="how-it-works" className="py-16 px-4">
         <div className="max-w-6xl mx-auto">
           <div className="text-center max-w-3xl mx-auto">
             <h2 className="text-3xl font-bold tracking-tight">Your Dispatch, Fully Automated</h2>
@@ -408,9 +421,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-            {/* ================= TEAM (Leadership + Departments) ================= */}
-      <TeamSection />
-
       {/* ================= CONTACT ================= */}
       <section className="py-20 px-4 bg-neutral-50 text-center">
         <h3 className="text-3xl font-bold">Questions?</h3>
@@ -434,117 +444,10 @@ export default function LandingPage() {
       {/* ================= FAQ (trimmed) ================= */}
       <FAQSection />
 
-      {/* ================= FOOTER ================= */}
-      <footer className="border-t border-neutral-200 py-10 text-center text-sm text-neutral-600">
-        <p>© {new Date().getFullYear()} AutoDispatchAI Inc., Canada</p>
-        <p className="mt-2 flex flex-wrap gap-4 justify-center">
-          <a href="/privacy" className="hover:underline">Privacy</a>
-          <a href="/terms" className="hover:underline">Terms</a>
-          <a href="/security" className="hover:underline">Security</a>
-          <a href="mailto:info@autodispatchai.com" className="hover:underline">info@autodispatchai.com</a>
-        </p>
-      </footer>
     </div>
   );
 }
 
-/* ================= Header Component ================= */
-function Header({ mobileOpen, setMobileOpen }: { mobileOpen: boolean; setMobileOpen: (v: boolean) => void; }) {
-  return (
-    <header className="sticky top-0 z-50 border-b border-neutral-200 bg-white/80 backdrop-blur">
-      <div className="mx-auto max-w-7xl h-16 px-4 flex items-center justify-between gap-3">
-        <a href="/" aria-label="AutoDispatchAI" className="flex items-center gap-2">
-          <motion.span
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35 }}
-            className="font-extrabold tracking-tight text-2xl sm:text-3xl"
-          >
-            Auto
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500">
-              Dispatch
-            </span>
-            AI
-          </motion.span>
-        </a>
-
-        <div className="hidden md:flex items-center gap-6">
-          <nav className="flex items-center gap-6 text-[15px]">
-            <a href="#features" className="hover:text-purple-700">Features</a>
-            <a href="#why-fleets" className="hover:text-purple-700">Why Fleets</a>
-            <a href="#impact" className="hover:text-purple-700">Impact</a>
-            <a href="#roi" className="hover:text-purple-700">ROI</a>
-            <a href="#loop" className="hover:text-purple-700 whitespace-nowrap">Human&nbsp;+&nbsp;AI</a>
-            <a href="#steps" className="hover:text-purple-700">4 Steps</a>
-            <a href="#why" className="hover:text-purple-700">Why Us</a>
-            <a href="#team" className="hover:text-purple-700">Team</a>
-            <a href="#faq" className="hover:text-purple-700">FAQ</a>
-          </nav>
-          <div className="flex items-center gap-3">
-            <a href="/login" className="px-4 py-2 text-sm font-medium text-neutral-700 hover:text-purple-700">
-              Log in
-            </a>
-            <a
-              href="/signup"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500 text-white text-sm font-semibold hover:opacity-90"
-              aria-label="Start 14-Day Trial (Sign up)"
-            >
-              Start 14-Day Trial
-            </a>
-          </div>
-        </div>
-
-        <button className="md:hidden p-2" onClick={() => setMobileOpen(true)} aria-label="Open Menu">
-          <Menu className="h-6 w-6" />
-        </button>
-      </div>
-
-      <AnimatePresence>
-        {mobileOpen && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="md:hidden fixed inset-0 z-50 bg-white"
-          >
-            <div className="flex items-center justify-between h-16 px-4 border-b border-neutral-200">
-              <span className="font-extrabold">AutoDispatchAI</span>
-              <button className="p-2" onClick={() => setMobileOpen(false)} aria-label="Close Menu">
-                <X className="h-6 w-6" />
-              </button>
-            </div>
-            <div className="p-6 grid gap-4 text-lg">
-              {[
-                ['#features', 'Features'],
-                ['#why-fleets', 'Why Fleets'],
-                ['#impact', 'Impact'],
-                ['#roi', 'ROI'],
-                ['#loop', 'Human + AI'],
-                ['#steps', '4 Steps'],
-                ['#why', 'Why Us'],
-                ['#team', 'Team'],
-                ['#faq', 'FAQ'],
-              ].map(([href, label]) => (
-                <a key={href} href={href} onClick={() => setMobileOpen(false)} className="hover:text-purple-700">
-                  {label}
-                </a>
-              ))}
-              <div className="pt-2">
-                <a href="/login" className="block py-3">Log in</a>
-                <a
-                  href="/signup"
-                  className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500 text-white font-semibold hover:opacity-90"
-                  aria-label="Start 14-Day Trial (Sign up)"
-                  onClick={() => setMobileOpen(false)}
-                >
-                  Start 14-Day Trial
-                </a>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </header>
-  );
-}
 
 /* ============ PREMIUM INTEGRATION TICKER ============ */
 function IntegrationTicker() {
@@ -775,6 +678,7 @@ function FeatureCard({
   theme: Theme;
 }) {
   const [active, setActive] = React.useState(false);
+  const prefersReducedMotion = useReducedMotion();
   const openAbove = index < 3;
   const open = active;
 
@@ -811,10 +715,10 @@ function FeatureCard({
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ opacity: 0, y: openAbove ? 10 : -10, scale: 0.98 }}
+            initial={{ opacity: 0, y: prefersReducedMotion ? 0 : (openAbove ? 10 : -10), scale: prefersReducedMotion ? 1 : 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: openAbove ? 10 : -10, scale: 0.98 }}
-            transition={{ duration: 0.18 }}
+            exit={{ opacity: 0, y: prefersReducedMotion ? 0 : (openAbove ? 10 : -10), scale: prefersReducedMotion ? 1 : 0.98 }}
+            transition={{ duration: prefersReducedMotion ? 0 : 0.18 }}
             className={`hidden md:block absolute left-1/2 -translate-x-1/2 z-40 w-[520px] ${
               openAbove ? 'bottom-[calc(100%+14px)]' : 'top-[calc(100%+14px)]'
             }`}
@@ -882,6 +786,31 @@ function ROIForm() {
   const [wage, setWage] = useState<number>(35);
   const [hours, setHours] = useState<number>(15);
   const [planners, setPlanners] = useState<number>(2);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const validate = () => {
+    const errs: Record<string, string> = {};
+    if (wage < 0 || wage > 200) errs.wage = 'Wage must be between $0 and $200/hr';
+    if (hours < 0 || hours > 160) errs.hours = 'Hours must be between 0 and 160/month';
+    if (planners < 1 || planners > 50) errs.planners = 'Planners must be between 1 and 50';
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleWageChange = (val: number) => {
+    setWage(val);
+    if (errors.wage) validate();
+  };
+
+  const handleHoursChange = (val: number) => {
+    setHours(val);
+    if (errors.hours) validate();
+  };
+
+  const handlePlannersChange = (val: number) => {
+    setPlanners(val);
+    if (errors.planners) validate();
+  };
 
   const monthly = Math.max(0, Math.round(wage * hours * planners));
   const yearly = monthly * 12;
@@ -894,11 +823,16 @@ function ROIForm() {
           <input
             type="number"
             min={0}
+            max={200}
             step="1"
             value={wage}
-            onChange={(e) => setWage(Number(e.target.value))}
-            className="w-full h-11 rounded-lg border border-neutral-300 px-3 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+            onChange={(e) => handleWageChange(Number(e.target.value))}
+            onBlur={validate}
+            className={`w-full h-11 rounded-lg border px-3 focus:outline-none focus:ring-2 focus:ring-purple-500/20 ${
+              errors.wage ? 'border-red-300' : 'border-neutral-300'
+            }`}
           />
+          {errors.wage && <p className="mt-1 text-xs text-red-600">{errors.wage}</p>}
         </label>
         <label className="text-sm">
           <div className="text-neutral-600 mb-1">Hours saved / mo (per planner)</div>
@@ -908,9 +842,13 @@ function ROIForm() {
             max={160}
             step="1"
             value={hours}
-            onChange={(e) => setHours(Number(e.target.value))}
-            className="w-full h-11 rounded-lg border border-neutral-300 px-3 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+            onChange={(e) => handleHoursChange(Number(e.target.value))}
+            onBlur={validate}
+            className={`w-full h-11 rounded-lg border px-3 focus:outline-none focus:ring-2 focus:ring-purple-500/20 ${
+              errors.hours ? 'border-red-300' : 'border-neutral-300'
+            }`}
           />
+          {errors.hours && <p className="mt-1 text-xs text-red-600">{errors.hours}</p>}
         </label>
         <label className="text-sm">
           <div className="text-neutral-600 mb-1"># of planners</div>
@@ -920,9 +858,13 @@ function ROIForm() {
             max={50}
             step="1"
             value={planners}
-            onChange={(e) => setPlanners(Number(e.target.value))}
-            className="w-full h-11 rounded-lg border border-neutral-300 px-3 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+            onChange={(e) => handlePlannersChange(Number(e.target.value))}
+            onBlur={validate}
+            className={`w-full h-11 rounded-lg border px-3 focus:outline-none focus:ring-2 focus:ring-purple-500/20 ${
+              errors.planners ? 'border-red-300' : 'border-neutral-300'
+            }`}
           />
+          {errors.planners && <p className="mt-1 text-xs text-red-600">{errors.planners}</p>}
         </label>
       </div>
 
@@ -1089,434 +1031,6 @@ function SectionStorySlide() {
         </motion.div>
       </AnimatePresence>
     </div>
-  );
-}
-
-/* ================= TEAM SECTION (leadership + departments) ================= */
-
-/* Departments array */
-const DEPARTMENTS: Array<{
-  title: string;
-  desc: string;
-  example: React.ReactNode;
-  theme: Theme;
-}> = [
-  {
-    title: 'AI & Automation Department',
-    desc: 'Manages AI agents, workflow automation, and internal AI initiatives under Komal.',
-    theme: { border: 'border-purple-300', ring: 'ring-purple-400/30', glow: 'shadow-[0_10px_30px_rgba(139,92,246,.16)]', grad: 'from-violet-500 via-purple-500 to-fuchsia-500' },
-    example: (
-      <div>
-        <div className="font-semibold">What we do</div>
-        <div className="mt-1 text-[14px] text-neutral-700">
-          Build, run and monitor AI agents that handle lead-gen, load parsing, negotiation drafts and continual automation improvements.
-        </div>
-        <ul className="mt-2 text-[14px] list-disc ml-5 text-neutral-700">
-          <li>24/7 agent monitoring & health checks</li>
-          <li>Automation playbooks (n8n / Notiflank)</li>
-          <li>Lead pipeline & priority routing</li>
-        </ul>
-        <div className="mt-2 text-sm text-neutral-500 italic">
-          KPI: agent uptime, leads generated, automation accuracy.
-        </div>
-        <div className="mt-2 text-sm text-emerald-700 font-medium">
-          Verified by: AI Head — Automation (human supervisor reviews agent outputs)
-        </div>
-      </div>
-    ),
-  },
-
-  {
-    title: 'R&D',
-    desc: 'Focuses on new features, innovation, and prototyping for transport solutions.',
-    theme: { border: 'border-fuchsia-300', ring: 'ring-fuchsia-400/30', glow: 'shadow-[0_10px_30px_rgba(217,70,239,.15)]', grad: 'from-fuchsia-500 via-pink-500 to-rose-500' },
-    example: (
-      <div>
-        <div className="font-semibold">What we do</div>
-        <div className="mt-1 text-[14px] text-neutral-700">
-          Prototype features, test model improvements, and run controlled pilots with carrier partners.
-        </div>
-        <ul className="mt-2 text-[14px] list-disc ml-5 text-neutral-700">
-          <li>Feature experiments & A/B validation</li>
-          <li>Model fine-tuning and evaluation</li>
-          <li>Pilot integrations with fleets</li>
-        </ul>
-        <div className="mt-2 text-sm text-neutral-500 italic">KPI: feature velocity, experiment win rate</div>
-        <div className="mt-2 text-sm text-emerald-700 font-medium">
-          Verified by: AI Head — R&D (human QA on model outputs)
-        </div>
-      </div>
-    ),
-  },
-
-  {
-    title: 'Problem Solving / Safety',
-    desc: 'Ensures compliance, resolves critical issues, and manages operational safety.',
-    theme: { border: 'border-amber-300', ring: 'ring-amber-400/30', glow: 'shadow-[0_10px_30px_rgba(251,191,36,.18)]', grad: 'from-amber-500 via-orange-500 to-yellow-500' },
-    example: (
-      <div>
-        <div className="font-semibold">What we do</div>
-        <div className="mt-1 text-[14px] text-neutral-700">
-          Monitor incidents, run safety audits, and close tickets—ensuring driver & cargo safety and regulatory compliance.
-        </div>
-        <ul className="mt-2 text-[14px] list-disc ml-5 text-neutral-700">
-          <li>Incident triage & remediation</li>
-          <li>Compliance checks (cross-border workflows)</li>
-          <li>Safety training & SOP updates</li>
-        </ul>
-        <div className="mt-2 text-sm text-neutral-500 italic">KPI: incidents closed, compliance score</div>
-        <div className="mt-2 text-sm text-emerald-700 font-medium">
-          Verified by: AI Head — Safety (human supervisor reviews automated flags)
-        </div>
-      </div>
-    ),
-  },
-
-  {
-    title: 'HR',
-    desc: 'Manages hiring, retention, and employee onboarding for all departments.',
-    theme: { border: 'border-sky-300', ring: 'ring-sky-400/30', glow: 'shadow-[0_10px_30px_rgba(56,189,248,.15)]', grad: 'from-sky-500 via-cyan-500 to-teal-500' },
-    example: (
-      <div>
-        <div className="font-semibold">What we do</div>
-        <div className="mt-1 text-[14px] text-neutral-700">
-          Recruit and onboard team members, manage payroll, and track retention & engagement.
-        </div>
-        <ul className="mt-2 text-[14px] list-disc ml-5 text-neutral-700">
-          <li>Hiring & onboarding flows</li>
-          <li>Employee engagement and training</li>
-          <li>Policy & benefits management</li>
-        </ul>
-        <div className="mt-2 text-sm text-neutral-500 italic">KPI: time-to-hire, retention rate</div>
-        <div className="mt-2 text-sm text-emerald-700 font-medium">
-          Verified by: AI Head — HR (human reviews automated candidate shortlists)
-        </div>
-      </div>
-    ),
-  },
-
-  {
-    title: 'Investor Relations',
-    desc: 'Coordinates with investors, manages reports, and organizes meetings.',
-    theme: { border: 'border-emerald-300', ring: 'ring-emerald-400/30', glow: 'shadow-[0_10px_30px_rgba(16,185,129,.16)]', grad: 'from-emerald-500 via-green-500 to-lime-500' },
-    example: (
-      <div>
-        <div className="font-semibold">What we do</div>
-        <div className="mt-1 text-[14px] text-neutral-700">
-          Prepare financial updates, investor decks, and coordinate diligence requests.
-        </div>
-        <ul className="mt-2 text-[14px] list-disc ml-5 text-neutral-700">
-          <li>Quarterly reporting & KPIs</li>
-          <li>Fundraising coordination</li>
-          <li>Investor communications</li>
-        </ul>
-        <div className="mt-2 text-sm text-neutral-500 italic">KPI: investor satisfaction, report cadence</div>
-        <div className="mt-2 text-sm text-emerald-700 font-medium">
-          Verified by: AI Head — Investor Relations (human verifies generated reports)
-        </div>
-      </div>
-    ),
-  },
-
-  {
-    title: 'Financial Department',
-    desc: 'Tracks budgets, ROI, forecasts, and overall financial health of the platform.',
-    theme: { border: 'border-violet-300', ring: 'ring-violet-400/30', glow: 'shadow-[0_10px_30px_rgba(139,92,246,.16)]', grad: 'from-violet-500 via-purple-500 to-fuchsia-500' },
-    example: (
-      <div>
-        <div className="font-semibold">What we do</div>
-        <div className="mt-1 text-[14px] text-neutral-700">
-          Budgeting, cashflow, unit economics and pre/post-loan spending analysis to keep the business healthy.
-        </div>
-        <ul className="mt-2 text-[14px] list-disc ml-5 text-neutral-700">
-          <li>Forecasting & variance tracking</li>
-          <li>Cost controls & spend approvals</li>
-          <li>Billing & Stripe reconciliation</li>
-        </ul>
-        <div className="mt-2 text-sm text-neutral-500 italic">KPI: burn rate, margin, forecast accuracy</div>
-        <div className="mt-2 text-sm text-emerald-700 font-medium">
-          Verified by: AI Head — Finance (human reviews automated forecasts)
-        </div>
-      </div>
-    ),
-  },
-
-  {
-    title: 'Media & Social Media Department',
-    desc: 'Manages press, social media, digital campaigns, and advertising strategies.',
-    theme: { border: 'border-rose-300', ring: 'ring-rose-400/30', glow: 'shadow-[0_10px_30px_rgba(244,63,94,.15)]', grad: 'from-rose-500 via-red-500 to-orange-500' },
-    example: (
-      <div>
-        <div className="font-semibold">What we do</div>
-        <div className="mt-1 text-[14px] text-neutral-700">
-          PR, social content, paid campaigns and creative — building brand trust and lead funnels.
-        </div>
-        <ul className="mt-2 text-[14px] list-disc ml-5 text-neutral-700">
-          <li>Press outreach & media relations</li>
-          <li>Organic social & creative production</li>
-          <li>Ad campaigns and performance tracking</li>
-        </ul>
-        <div className="mt-2 text-sm text-neutral-500 italic">KPI: reach, engagement, ad CPA</div>
-        <div className="mt-2 text-sm text-emerald-700 font-medium">
-          Verified by: AI Head — Media (human QA for campaign copy & targeting)
-        </div>
-      </div>
-    ),
-  },
-
-  {
-    title: 'Tech Department',
-    desc: 'Maintains uptime, bug fixes, integrations, and infrastructure for web and backend.',
-    theme: { border: 'border-sky-300', ring: 'ring-sky-400/30', glow: 'shadow-[0_10px_30px_rgba(56,189,248,.15)]', grad: 'from-sky-500 via-cyan-500 to-teal-500' },
-    example: (
-      <div>
-        <div className="font-semibold">What we do</div>
-        <div className="mt-1 text-[14px] text-neutral-700">
-          Ensure production stability (Vercel frontend, Supabase backend), integrations, and incident response.
-        </div>
-        <ul className="mt-2 text-[14px] list-disc ml-5 text-neutral-700">
-          <li>Monitoring & SLOs</li>
-          <li>Bug triage & releases</li>
-          <li>Integration ops (Samsara, Gmail, ELDs)</li>
-        </ul>
-        <div className="mt-2 text-sm text-neutral-500 italic">KPI: uptime, MTTR, deployment frequency</div>
-        <div className="mt-2 text-sm text-emerald-700 font-medium">
-          Verified by: AI Head — Tech (human checks automated alerts & fixes)
-        </div>
-      </div>
-    ),
-  },
-
-  {
-    title: 'Sales & Revenue',
-    desc: 'Tracks leads, revenue growth, and AI-assisted sales for transport clients.',
-    theme: { border: 'border-amber-300', ring: 'ring-amber-400/30', glow: 'shadow-[0_10px_30px_rgba(251,191,36,.18)]', grad: 'from-amber-500 via-orange-500 to-yellow-500' },
-    example: (
-      <div>
-        <div className="font-semibold">What we do</div>
-        <div className="mt-1 text-[14px] text-neutral-700">
-          Convert inbound leads, run demos, and grow recurring ARR using a mix of human reps + AI-sourced leads.
-        </div>
-        <ul className="mt-2 text-[14px] list-disc ml-5 text-neutral-700">
-          <li>Lead qualification & scoring</li>
-          <li>Demo & onboarding handoff</li>
-          <li>Renewal & expansion playbooks</li>
-        </ul>
-        <div className="mt-2 text-sm text-neutral-500 italic">KPI: MRR, conversion rate, LTV:CAC</div>
-        <div className="mt-2 text-sm text-emerald-700 font-medium">
-          Verified by: AI Head — Revenue (human validates AI lead recommendations)
-        </div>
-      </div>
-    ),
-  },
-
-  {
-    title: 'Customer Support / Client Relations',
-    desc: 'Handles client queries, escalations, and service support for carriers.',
-    theme: { border: 'border-fuchsia-300', ring: 'ring-fuchsia-400/30', glow: 'shadow-[0_10px_30px_rgba(217,70,239,.15)]', grad: 'from-fuchsia-500 via-pink-500 to-rose-500' },
-    example: (
-      <div>
-        <div className="font-semibold">What we do</div>
-        <div className="mt-1 text-[14px] text-neutral-700">
-          24×7 ticketing, SLA management, and escalation for operational or billing issues.
-        </div>
-        <ul className="mt-2 text-[14px] list-disc ml-5 text-neutral-700">
-          <li>Ticket triage & SLAs</li>
-          <li>Onboarding hand-holding</li>
-          <li>Client success check-ins</li>
-        </ul>
-        <div className="mt-2 text-sm text-neutral-500 italic">KPI: CSAT, SLA adherence</div>
-        <div className="mt-2 text-sm text-emerald-700 font-medium">
-          Verified by: AI Head — Client Relations (human reviews automated replies)
-        </div>
-      </div>
-    ),
-  },
-
-  {
-    title: 'Legal / Compliance',
-    desc: 'Ensures contracts, regulations, and data compliance for all operations.',
-    theme: { border: 'border-violet-300', ring: 'ring-violet-400/30', glow: 'shadow-[0_10px_30px_rgba(139,92,246,.16)]', grad: 'from-violet-500 via-purple-500 to-fuchsia-500' },
-    example: (
-      <div>
-        <div className="font-semibold">What we do</div>
-        <div className="mt-1 text-[14px] text-neutral-700">
-          Maintain contracts, privacy controls, and regulatory compliance (GDPR, transport rules, SOC 2 prep).
-        </div>
-        <ul className="mt-2 text-[14px] list-disc ml-5 text-neutral-700">
-          <li>Contract review & templates</li>
-          <li>Data processing & privacy controls</li>
-          <li>Audit readiness</li>
-        </ul>
-        <div className="mt-2 text-sm text-neutral-500 italic">KPI: compliance incidents, audit readiness</div>
-        <div className="mt-2 text-sm text-emerald-700 font-medium">
-          Verified by: AI Head — Compliance (human approves automated legal summaries)
-        </div>
-      </div>
-    ),
-  },
-
-  {
-    title: 'Product Management',
-    desc: 'Coordinates feature roadmap between R&D, Tech, and AI teams.',
-    theme: { border: 'border-emerald-300', ring: 'ring-emerald-400/30', glow: 'shadow-[0_10px_30px_rgba(16,185,129,.16)]', grad: 'from-emerald-500 via-green-500 to-lime-500' },
-    example: (
-      <div>
-        <div className="font-semibold">What we do</div>
-        <div className="mt-1 text-[14px] text-neutral-700">
-          Prioritize roadmap, collect fleet feedback, and coordinate cross-team releases.
-        </div>
-        <ul className="mt-2 text-[14px] list-disc ml-5 text-neutral-700">
-          <li>Roadmap & release planning</li>
-          <li>Customer feedback loops</li>
-          <li>Cross-team coordination</li>
-        </ul>
-        <div className="mt-2 text-sm text-neutral-500 italic">KPI: feature adoption, time-to-release</div>
-        <div className="mt-2 text-sm text-emerald-700 font-medium">
-          Verified by: AI Head — Product (human reviews automated prioritization)
-        </div>
-      </div>
-    ),
-  },
-
-  {
-    title: 'AI Verification Team',
-    desc: 'Verifies AI outputs and ensures accuracy before client delivery.',
-    theme: { border: 'border-purple-300', ring: 'ring-purple-400/30', glow: 'shadow-[0_10px_30px_rgba(139,92,246,.16)]', grad: 'from-violet-500 via-purple-500 to-fuchsia-500' },
-    example: (
-      <div>
-        <div className="font-semibold">What we do</div>
-        <div className="mt-1 text-[14px] text-neutral-700">
-          Manual QA, spot checks, and anomaly investigation for agent-generated suggestions and actions.
-        </div>
-        <ul className="mt-2 text-[14px] list-disc ml-5 text-neutral-700">
-          <li>Daily QA samples of agent actions</li>
-          <li>Anomaly detection & escalations</li>
-          <li>Training data curation for model improvements</li>
-        </ul>
-        <div className="mt-2 text-sm text-neutral-500 italic">KPI: QA pass rate, false-positive reduction</div>
-        <div className="mt-2 text-sm text-emerald-700 font-medium">
-          Note: This team signs off on critical agent outputs before client impact.
-        </div>
-      </div>
-    ),
-  },
-];
-
-
-function TeamSection() {
-  return (
-    <section id="team" className="py-24 px-4 border-t border-neutral-200 bg-white">
-      <div className="max-w-7xl mx-auto text-center">
-        <h2 className="text-3xl md:text-4xl font-bold mb-2">Leadership & Internal Teams</h2>
-        <p className="text-neutral-600 max-w-3xl mx-auto mb-10">
-          Our human teams drive every aspect of AutoDispatchAI — from operations to revenue, R&D, and client success. Guided by our three founders and backed by supervised AI agents, we deliver automation, operational efficiency, and measurable profit clarity
-        </p>
-
-        {/* Leadership row */}
-        <div className="mb-12 grid gap-8 grid-cols-1 sm:grid-cols-3 items-stretch">
-          {/* Deepak — with real image */}
-          <div className="p-8 rounded-2xl border border-neutral-200 bg-gradient-to-b from-[#f8fafc] to-white shadow-sm hover:shadow-md transition flex flex-col">
-            <div className="flex items-center gap-4">
-              <img
-                src="/deepak-sidhu.png"
-                alt="Deepak Sidhu — Founder & CEO"
-                className="h-20 w-20 rounded-full object-cover shadow-sm"
-              />
-              <div className="text-left">
-                <div className="text-xl font-semibold text-neutral-900">Deepak Sidhu</div>
-                <div className="text-sm text-neutral-500">Founder & CEO</div>
-              </div>
-            </div>
-            <p className="mt-4 text-[15px] text-neutral-700 leading-7 flex-1">
-              Deepak ensures the product solves real dispatch problems — bringing automation, operational efficiency, and profit clarity to carriers.
-            </p>
-            <div className="mt-6">
-              <a
-                href="https://www.linkedin.com/in/deepaksidhu1"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-[#0A66C2] text-white font-semibold hover:bg-[#094a8f]"
-              >
-                Connect on LinkedIn
-              </a>
-            </div>
-          </div>
-
-          {/* Danny — placeholder avatar */}
-          <div className="p-8 rounded-2xl border border-neutral-200 bg-gradient-to-b from-[#f8fafc] to-white shadow-sm hover:shadow-md transition flex flex-col">
-            <div className="flex items-center gap-4">
-              <div className="h-20 w-20 rounded-full bg-neutral-100 flex items-center justify-center text-xl font-bold text-neutral-700">
-                DS
-              </div>
-              <div className="text-left">
-                <div className="text-xl font-semibold text-neutral-900">Danny Singh</div>
-                <div className="text-sm text-neutral-500">Co-Founder & Head of Operations</div>
-              </div>
-            </div>
-            <p className="mt-4 text-[15px] text-neutral-700 leading-7 flex-1">
-              Danny brings frontline carrier experience and designs workflows that are practical, reliable, and scale-ready.
-            </p>
-            <div className="mt-6">
-              <a
-                href="mailto:danny@autodispatchai.com"
-                className="inline-block w-full text-center px-5 py-2.5 rounded-lg bg-neutral-900 text-white font-semibold hover:bg-neutral-800"
-              >
-                Email Danny
-              </a>
-            </div>
-          </div>
-
-          {/* Komal — placeholder avatar + short professional one-liner */}
-          <div className="p-8 rounded-2xl border border-neutral-200 bg-gradient-to-b from-[#f8fafc] to-white shadow-sm hover:shadow-md transition flex flex-col">
-            <div className="flex items-center gap-4">
-              <div className="h-20 w-20 rounded-full bg-neutral-100 flex items-center justify-center text-xl font-bold text-neutral-700">
-                KS
-              </div>
-              <div className="text-left">
-                <div className="text-xl font-semibold text-neutral-900">Komal Sidhu</div>
-                <div className="text-sm text-neutral-500">Co-Founder & Head of Technology / AI</div>
-              </div>
-            </div>
-            <p className="mt-4 text-[15px] text-neutral-700 leading-7 flex-1">
-              Komal leads our AI & Tech division — overseeing automation, platform reliability, and accuracy of AI outputs.
-            </p>
-            <div className="mt-6">
-              <a
-                href="mailto:komal@autodispatchai.com"
-                className="inline-block w-full text-center px-5 py-2.5 rounded-lg bg-neutral-900 text-white font-semibold hover:bg-neutral-800"
-              >
-                Email Komal
-              </a>
-            </div>
-          </div>
-        </div>
-
-        {/* Internal departments intro */}
-<h3 className="text-2xl md:text-3xl font-bold mb-3 text-center">
-  Internal Departments
-</h3>
-<p className="text-neutral-600 max-w-3xl mx-auto mb-8 text-center">
-  Below are our core departments. Day-to-day operations are powered by supervised AI agents, while Deepak, Danny, and Komal oversee strategy, safety, and escalation. Each department is continuously audited by our AI Verification and Monitoring Teams to ensure precision, compliance, and uninterrupted performance. (hover/tap to preview).
-</p>
-
-
-
-        {/* Departments grid — uses FeatureCard component */}
-        <div className="mt-6 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {DEPARTMENTS.map((d, idx) => (
-            <FeatureCard
-              key={d.title}
-              index={idx}
-              title={d.title}
-              desc={d.desc}
-              example={d.example}
-              theme={d.theme}
-            />
-          ))}
-        </div>
-      </div>
-    </section>
   );
 }
 

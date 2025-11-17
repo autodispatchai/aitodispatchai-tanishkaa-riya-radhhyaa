@@ -1,8 +1,10 @@
 // src/app/choose-plan/page.tsx
 'use client';
 
-import { useMemo, useState, Suspense } from 'react';
+import { useMemo, useState, Suspense, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import Link from 'next/link';
+import { createClient } from '@/lib/supabase';
 
 type BillingCycle = 'monthly' | 'yearly';
 type PlanName = 'ESSENTIALS' | 'PRO' | 'ENTERPRISE';
@@ -91,11 +93,45 @@ function pct(discount: number): number {
 }
 
 function ChoosePlanContent() {
-  const [billing, setBilling] = useState<BillingCycle>('monthly');
-  const [selectedPlan, setSelectedPlan] = useState<PlanName>('PRO');
-  const [selectedAddOns, setSelectedAddOns] = useState<Record<string, boolean>>({});
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
+  
+  // Check auth status
+  useEffect(() => {
+    const checkAuth = async () => {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      setIsLoggedIn(!!session);
+    };
+    checkAuth();
+  }, []);
+
+  // Load from localStorage on mount
+  const [billing, setBilling] = useState<BillingCycle>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('autodispatch_billing');
+      return (saved === 'yearly' || saved === 'monthly') ? saved : 'monthly';
+    }
+    return 'monthly';
+  });
+  const [selectedPlan, setSelectedPlan] = useState<PlanName>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('autodispatch_plan');
+      return (saved === 'ESSENTIALS' || saved === 'PRO' || saved === 'ENTERPRISE') ? saved : 'PRO';
+    }
+    return 'PRO';
+  });
+  const [selectedAddOns, setSelectedAddOns] = useState<Record<string, boolean>>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('autodispatch_addons');
+      try {
+        return saved ? JSON.parse(saved) : {};
+      } catch {
+        return {};
+      }
+    }
+    return {};
+  });
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
 
   const plan = useMemo(() => PLANS.find(p => p.name === selectedPlan)!, [selectedPlan]);
   const isEnterprise = plan.monthly == null;
@@ -121,41 +157,34 @@ function ChoosePlanContent() {
   }, [planPrice, addOnsTotal]);
 
   function toggleAddOn(id: string) {
-    setSelectedAddOns(prev => ({ ...prev, [id]: !prev[id] }));
+    setSelectedAddOns(prev => {
+      const updated = { ...prev, [id]: !prev[id] };
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('autodispatch_addons', JSON.stringify(updated));
+      }
+      return updated;
+    });
   }
 
-  async function checkout() {
-    try {
-      setErr(null);
-      setLoading(true);
-
-      if (plan.name === 'ENTERPRISE') {
-        window.location.href = 'mailto:info@autodispatchai.com?subject=AutoDispatchAI%20Enterprise';
-        return;
-      }
-
-      const chosenAddOnIds = Object.keys(selectedAddOns).filter(k => selectedAddOns[k]);
-
-      const res = await fetch('/api/billing/customer-portal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          plan: plan.name,
-          billing,
-          addOns: chosenAddOnIds,
-        }),
-      });
-
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || 'Checkout failed');
-      if (!json?.url) throw new Error('No checkout URL');
-
-      window.location.href = json.url;
-    } catch (e: any) {
-      setErr(e?.message || 'Checkout error');
-    } finally {
-      setLoading(false);
+  // Persist billing and plan changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('autodispatch_billing', billing);
+      localStorage.setItem('autodispatch_plan', selectedPlan);
     }
+  }, [billing, selectedPlan]);
+
+  function handleChoosePlan() {
+    // Store plan selection in localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('autodispatch_selected_plan', selectedPlan);
+      localStorage.setItem('autodispatch_billing', billing);
+      localStorage.setItem('autodispatch_addons', JSON.stringify(selectedAddOns));
+    }
+
+    // Redirect to signup with plan param
+    const planParam = selectedPlan.toLowerCase();
+    window.location.href = `/signup?plan=${planParam}`;
   }
 
   return (
@@ -169,19 +198,45 @@ function ChoosePlanContent() {
       </header>
 
       <main className="max-w-6xl mx-auto px-6 pb-16 grid lg:grid-cols-[1fr,380px] gap-10">
+        {/* Signup/Login Banner - if not logged in */}
+        {isLoggedIn === false && (
+          <div className="lg:col-span-2 mb-4">
+            <div className="rounded-xl border border-neutral-200 bg-gradient-to-r from-indigo-50 via-purple-50 to-fuchsia-50 p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-center sm:text-left">
+                <p className="text-sm font-semibold text-neutral-900">Ready to get started?</p>
+                <p className="text-xs text-neutral-600 mt-1">Sign up to start your 14-day free trial. No credit card required.</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Link
+                  href="/login"
+                  className="px-5 py-2.5 rounded-xl border border-neutral-300 bg-white text-neutral-700 text-sm font-medium hover:bg-neutral-50 transition-colors whitespace-nowrap"
+                >
+                  Log in
+                </Link>
+                <Link
+                  href="/signup"
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500 text-white text-sm font-semibold hover:opacity-90 transition-opacity whitespace-nowrap"
+                >
+                  Sign up
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
         <section>
           <div className="flex justify-center mb-8">
             {isEnterprise ? (
               <div className="flex flex-col items-center gap-3">
                 <span className="px-4 py-2 rounded-full text-sm font-semibold border bg-neutral-100 text-neutral-900">
-                  <span className="font-bold">Custom pricing</span> — Contact Sales
+                  <span className="font-bold">Custom pricing</span> — Talk to Our Team
                 </span>
                 <div className="flex gap-3">
-                  <a href="mailto:info@autodispatchai.com?subject=AutoDispatchAI%20Enterprise" className="h-10 px-4 rounded-xl bg-neutral-900 text-white text-sm font-medium flex items-center justify-center hover:bg-neutral-800">
-                    Email Sales
+                  <a href="https://calendly.com/autodispatchai/enterprise?utm_source=website&utm_medium=choose-plan" target="_blank" rel="noreferrer" className="h-10 px-4 rounded-xl bg-neutral-900 text-white text-sm font-medium flex items-center justify-center hover:bg-neutral-800">
+                    Book a Demo
                   </a>
-                  <a href="tel:+14164274542" className="h-10 px-4 rounded-xl border border-neutral-300 text-sm font-medium flex items-center justify-center hover:bg-neutral-50">
-                    Call Sales (+1 416-427-4542)
+                  <a href="mailto:info@autodispatchai.com?subject=AutoDispatchAI%20Enterprise" className="h-10 px-4 rounded-xl border border-neutral-300 text-sm font-medium flex items-center justify-center hover:bg-neutral-50">
+                    Email Sales
                   </a>
                 </div>
               </div>
@@ -203,9 +258,6 @@ function ChoosePlanContent() {
             )}
           </div>
 
-          {err && (
-            <div className="mx-auto mb-4 max-w-lg rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{err}</div>
-          )}
 
           {/* PLANS GRID */}
           <div className="grid md:grid-cols-3 gap-6">
@@ -215,6 +267,7 @@ function ChoosePlanContent() {
               const perCycle = p.monthly != null ? priceForCycle(p.monthly, billing, p.yearlyDiscount) : 0;
               const compareAnnual = p.monthly != null ? p.monthly * 12 : 0;
               const savedAmount = p.monthly != null && billing === 'yearly' ? compareAnnual - perCycle : 0;
+              const discountPct = p.monthly != null && billing === 'yearly' ? pct(p.yearlyDiscount) : 0;
 
               return (
                 <motion.button
@@ -227,8 +280,13 @@ function ChoosePlanContent() {
                   className={`relative text-left border rounded-2xl p-6 shadow-sm transition ${active ? 'border-neutral-900 shadow-md' : 'border-neutral-200 hover:border-neutral-300'}`}
                 >
                   {p.popular && (
-                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs bg-neutral-900 text-white px-3 py-1 rounded-full">
+                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs bg-neutral-900 text-white px-3 py-1 rounded-full font-semibold">
                       MOST POPULAR
+                    </span>
+                  )}
+                  {showSave && (
+                    <span className="absolute -top-3 right-4 text-xs bg-emerald-600 text-white px-2.5 py-1 rounded-full font-semibold">
+                      Save {discountPct}%
                     </span>
                   )}
                   <h3 className="text-lg font-bold">{p.name}</h3>
@@ -327,16 +385,45 @@ function ChoosePlanContent() {
               <span>{isEnterprise ? 'Contact Sales' : `$${grandTotal}`}</span>
             </div>
           </div>
-          <button
-            onClick={checkout}
-            disabled={loading}
-            className="mt-5 h-11 w-full rounded-xl font-semibold tracking-tight bg-neutral-900 text-white hover:bg-neutral-800 disabled:opacity-60"
-          >
-            {plan.name === 'ENTERPRISE' ? 'Contact Sales' : (loading ? 'Processing…' : `Continue with ${plan.name}`)}
-          </button>
-          <p className="text-xs text-neutral-500 mt-3 text-center">
-            Card required to start trial • Auto-charged after 14 days • Cancel anytime
-          </p>
+          {isLoggedIn === false ? (
+            <div className="mt-5 space-y-3">
+              <Link
+                href={`/signup?plan=${selectedPlan.toLowerCase()}`}
+                className="block h-11 w-full rounded-xl font-semibold tracking-tight bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500 text-white hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+              >
+                {plan.name === 'ENTERPRISE' ? (
+                  'Talk to Our Team'
+                ) : (
+                  `Sign up for ${plan.name} Plan`
+                )}
+              </Link>
+              <div className="text-center">
+                <p className="text-xs text-neutral-500">
+                  Already have an account?{' '}
+                  <Link href="/login" className="text-indigo-600 hover:text-indigo-700 font-medium underline">
+                    Log in
+                  </Link>
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <button
+                onClick={handleChoosePlan}
+                disabled={loading || isEnterprise}
+                className="mt-5 h-11 w-full rounded-xl font-semibold tracking-tight bg-neutral-900 text-white hover:bg-neutral-800 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {plan.name === 'ENTERPRISE' ? (
+                  'Talk to Our Team'
+                ) : (
+                  `Choose ${plan.name} Plan`
+                )}
+              </button>
+              <p className="text-xs text-neutral-500 mt-3 text-center">
+                Card required to start trial • Auto-charged after 14 days • Cancel anytime
+              </p>
+            </>
+          )}
         </aside>
       </main>
     </div>

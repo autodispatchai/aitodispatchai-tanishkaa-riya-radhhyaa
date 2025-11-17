@@ -11,6 +11,7 @@ function CreateCompanyContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const inviteCode = searchParams.get('code');
+  const planParam = searchParams.get('plan');
 
   const supabase = createClient();
 
@@ -77,7 +78,16 @@ function CreateCompanyContent() {
         if (existingCompany.subscription_status === 'active') {
           router.replace('/dashboard');
         } else {
-          router.replace('/choose-plan');
+          // Redirect to billing if plan is selected, otherwise choose-plan
+          const storedPlan = typeof window !== 'undefined' 
+            ? localStorage.getItem('autodispatch_selected_plan')
+            : null;
+          if (storedPlan || planParam) {
+            const plan = planParam?.toUpperCase() || storedPlan || 'PRO';
+            router.replace(`/billing?plan=${plan.toLowerCase()}`);
+          } else {
+            router.replace('/choose-plan');
+          }
         }
         return;
       }
@@ -106,7 +116,16 @@ function CreateCompanyContent() {
       setOk(true);
       setTimeout(() => {
         router.refresh(); // REFRESH SESSION
-        router.push('/choose-plan');
+        // Redirect to billing if plan is selected, otherwise choose-plan
+        const storedPlan = typeof window !== 'undefined' 
+          ? localStorage.getItem('autodispatch_selected_plan')
+          : null;
+        if (storedPlan || planParam) {
+          const plan = planParam?.toUpperCase() || storedPlan || 'PRO';
+          router.push(`/billing?plan=${plan.toLowerCase()}`);
+        } else {
+          router.push('/choose-plan');
+        }
       }, 800);
     } catch (e: any) {
       setErr(e?.message || 'Failed to save company. Try again.');

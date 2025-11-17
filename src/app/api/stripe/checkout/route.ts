@@ -109,6 +109,7 @@ export async function POST(req: NextRequest) {
       metadata: {
         user_id: user.id,
         plan,
+        billingCycle: billingCycle,
         addOns: addOns.join(','),
       },
       success_url: `${DOMAIN_URL}/billing/choose-plan?status=success`,
