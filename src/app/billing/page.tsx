@@ -67,12 +67,25 @@ function BillingContent() {
       setLoading(true);
 
       const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (!session) {
+      
+      // Refresh session to ensure it's valid
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('[billing] Session error:', sessionError);
+        setErr('Session expired. Please log in again.');
         router.push('/login');
         return;
       }
+
+      if (!session) {
+        setErr('Please log in to continue.');
+        router.push('/login');
+        return;
+      }
+      
+      // Refresh the session to ensure cookies are up to date
+      await supabase.auth.refreshSession();
 
       if (plan === 'ENTERPRISE') {
         window.location.href = 'https://calendly.com/autodispatchai/enterprise?utm_source=website&utm_medium=billing';
