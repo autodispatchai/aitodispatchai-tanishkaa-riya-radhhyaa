@@ -145,15 +145,15 @@ export async function POST(request: Request) {
       metadata: {
         user_id: session.user.id,
         plan,
-        billing_cycle: billingCycle,
-        addons: addedAddOns.join(','),
+        billing: billingCycle, // Webhook expects 'billing' not 'billing_cycle'
+        addOns: addedAddOns.join(','), // Webhook expects 'addOns' not 'addons'
       },
       subscription_data: {
         metadata: {
           user_id: session.user.id,
           plan,
-          billing_cycle: billingCycle,
-          addons: addedAddOns.join(','),
+          billing: billingCycle, // Webhook expects 'billing' not 'billing_cycle'
+          addOns: addedAddOns.join(','), // Webhook expects 'addOns' not 'addons'
         },
       },
     });
