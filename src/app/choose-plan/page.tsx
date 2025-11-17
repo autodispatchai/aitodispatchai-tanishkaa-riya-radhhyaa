@@ -268,32 +268,6 @@ function ChoosePlanContent() {
       </header>
 
       <main className="max-w-6xl mx-auto px-6 pb-16 grid lg:grid-cols-[1fr,380px] gap-10">
-        {/* Signup/Login Banner - if not logged in */}
-        {isLoggedIn === false && (
-          <div className="lg:col-span-2 mb-4">
-            <div className="rounded-xl border border-neutral-200 bg-gradient-to-r from-indigo-50 via-purple-50 to-fuchsia-50 p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="text-center sm:text-left">
-                <p className="text-sm font-semibold text-neutral-900">Ready to get started?</p>
-                <p className="text-xs text-neutral-600 mt-1">Sign up to start your 14-day free trial. No credit card required.</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <Link
-                  href="/login"
-                  className="px-5 py-2.5 rounded-xl border border-neutral-300 bg-white text-neutral-700 text-sm font-medium hover:bg-neutral-50 transition-colors whitespace-nowrap"
-                >
-                  Log in
-                </Link>
-                <Link
-                  href="/signup"
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500 text-white text-sm font-semibold hover:opacity-90 transition-opacity whitespace-nowrap"
-                >
-                  Sign up
-                </Link>
-              </div>
-            </div>
-          </div>
-        )}
-
         <section>
           <div className="flex justify-center mb-8">
             {isEnterprise ? (
