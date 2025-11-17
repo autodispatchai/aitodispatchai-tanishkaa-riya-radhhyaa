@@ -43,14 +43,15 @@ export default function LoginPage() {
           if (subscription) {
             window.location.href = '/dashboard';
           } else {
-          // Check for stored plan and redirect to billing
-          const storedPlan = typeof window !== 'undefined'
-            ? localStorage.getItem('autodispatch_selected_plan')
-            : null;
-          if (storedPlan) {
-            window.location.href = `/billing?plan=${storedPlan.toLowerCase()}`;
-          } else {
-            window.location.href = '/choose-plan';
+            // Check for stored plan and redirect to billing
+            const storedPlan = typeof window !== 'undefined'
+              ? localStorage.getItem('autodispatch_selected_plan')
+              : null;
+            if (storedPlan) {
+              window.location.href = `/billing?plan=${storedPlan.toLowerCase()}`;
+            } else {
+              window.location.href = '/choose-plan';
+            }
           }
         }
       }
@@ -77,14 +78,15 @@ export default function LoginPage() {
           if (subscription) {
             window.location.href = '/dashboard';
           } else {
-          // Check for stored plan and redirect to billing
-          const storedPlan = typeof window !== 'undefined'
-            ? localStorage.getItem('autodispatch_selected_plan')
-            : null;
-          if (storedPlan) {
-            window.location.href = `/billing?plan=${storedPlan.toLowerCase()}`;
-          } else {
-            window.location.href = '/choose-plan';
+            // Check for stored plan and redirect to billing
+            const storedPlan = typeof window !== 'undefined'
+              ? localStorage.getItem('autodispatch_selected_plan')
+              : null;
+            if (storedPlan) {
+              window.location.href = `/billing?plan=${storedPlan.toLowerCase()}`;
+            } else {
+              window.location.href = '/choose-plan';
+            }
           }
         }
       }
@@ -134,7 +136,10 @@ export default function LoginPage() {
 
       // Check if user has a company and subscription
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        setLoading(false);
+        return;
+      }
 
       const { data: company } = await supabase
         .from('companies')
@@ -153,14 +158,15 @@ export default function LoginPage() {
         if (subscription) {
           window.location.href = '/dashboard';
         } else {
-        // Check for stored plan and redirect to billing
-        const storedPlan = typeof window !== 'undefined'
-          ? localStorage.getItem('autodispatch_selected_plan')
-          : null;
-        if (storedPlan) {
-          window.location.href = `/billing?plan=${storedPlan.toLowerCase()}`;
-        } else {
-          window.location.href = '/choose-plan';
+          // Check for stored plan and redirect to billing
+          const storedPlan = typeof window !== 'undefined'
+            ? localStorage.getItem('autodispatch_selected_plan')
+            : null;
+          if (storedPlan) {
+            window.location.href = `/billing?plan=${storedPlan.toLowerCase()}`;
+          } else {
+            window.location.href = '/choose-plan';
+          }
         }
       }
     } catch (e: any) {
