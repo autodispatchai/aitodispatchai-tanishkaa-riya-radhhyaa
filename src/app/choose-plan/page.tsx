@@ -174,15 +174,12 @@ function ChoosePlanContent() {
     }
   }, [billing, selectedPlan]);
 
-  // FINAL FIXED handleChoosePlan — YE HI SABSE ZAROORI HAI
+  // SIMPLIFIED handleChoosePlan — CLEAN & WORKING
   async function handleChoosePlan() {
     if (loading) return;
     setLoading(true);
 
-    localStorage.setItem('autodispatch_selected_plan', selectedPlan);
-    localStorage.setItem('autodispatch_billing', billing);
-    localStorage.setItem('autodispatch_addons', JSON.stringify(selectedAddOns));
-
+    // Check auth
     const supabase = createClient();
     const { data: { session } } = await supabase.auth.getSession();
 
@@ -204,7 +201,6 @@ function ChoosePlanContent() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        cache: 'no-store', // YE LINE DAAL DIYI — ERROR KHATAM!
         body: JSON.stringify({
           plan: selectedPlan,
           billingCycle: billing,
@@ -212,67 +208,20 @@ function ChoosePlanContent() {
         }),
       });
 
-      // Parse response once
-      const json = await res.json().catch(() => ({ error: 'Failed to parse response' }));
-      
-      // Check response status
-      if (!res.ok) {
-        const errorMsg = json?.error || `HTTP ${res.status}: ${res.statusText}`;
-        console.error('[choose-plan] ❌ API Error:', {
-          status: res.status,
-          statusText: res.statusText,
-          error: errorMsg,
-          fullResponse: json,
-        });
-        alert(errorMsg);
+      const data = await res.json();
+      console.log('[choose-plan] Full API Response:', data);
+
+      if (data.url) {
+        console.log('Valid Stripe URL received:', data.url);
+        window.location.href = data.url; // ye sabse reliable hai
+      } else {
+        console.error('[choose-plan] No URL in response:', data);
+        alert(data?.error || 'Payment setup error. Check console.');
         setLoading(false);
-        return;
       }
-
-      console.log('[choose-plan] 📦 Full API Response:', json);
-
-      if (!json?.url) {
-        console.error('[choose-plan] ❌ No URL in response:', json);
-        alert(json?.error || 'Payment failed. No checkout URL received.');
-        setLoading(false);
-        return;
-      }
-
-      // Validate URL
-      if (!json.url.startsWith('https://')) {
-        console.error('[choose-plan] ❌ Invalid URL format:', json.url);
-        alert('Invalid checkout URL. Please try again.');
-        setLoading(false);
-        return;
-      }
-
-      console.log('[choose-plan] ✅ Valid Stripe URL received:', json.url);
-      console.log('[choose-plan] 🔄 Attempting redirect...');
-      
-      localStorage.removeItem('autodispatch_selected_plan');
-      localStorage.removeItem('autodispatch_billing');
-      localStorage.removeItem('autodispatch_addons');
-      
-      // Try multiple redirect methods
-      try {
-        // Method 1: Direct href (most reliable)
-        window.location.href = json.url;
-        
-        // Fallback: If redirect doesn't happen in 1 second, try window.open
-        setTimeout(() => {
-          if (document.hasFocus()) {
-            console.warn('[choose-plan] ⚠️ Redirect may have failed, trying window.open...');
-            window.open(json.url, '_blank');
-          }
-        }, 1000);
-      } catch (redirectError) {
-        console.error('[choose-plan] ❌ Redirect error:', redirectError);
-        // Last resort: window.open in new tab
-        window.open(json.url, '_blank');
-      }
-    } catch (error) {
-      console.error('Checkout error:', error);
-      alert('Network error. Please try again.');
+    } catch (err) {
+      console.error('[choose-plan] Fetch error:', err);
+      alert('Network error. Try again.');
       setLoading(false);
     }
   }
