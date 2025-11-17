@@ -17,6 +17,7 @@ function BillingContent() {
   const [billing, setBilling] = useState<BillingCycle>('monthly');
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [autoCheckoutTriggered, setAutoCheckoutTriggered] = useState(false);
 
   useEffect(() => {
     // Load plan from URL param or localStorage
@@ -40,6 +41,23 @@ function BillingContent() {
       }
     }
   }, [planParam]);
+
+  // Auto-create Stripe checkout if plan exists in URL (only once)
+  useEffect(() => {
+    if (planParam && plan && plan !== 'ENTERPRISE' && !autoCheckoutTriggered && !loading) {
+      const supabase = createClient();
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          setAutoCheckoutTriggered(true);
+          // Auto-trigger checkout after a short delay
+          setTimeout(() => {
+            handleCheckout();
+          }, 1500);
+        }
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planParam, plan, autoCheckoutTriggered]);
 
   async function handleCheckout() {
     try {

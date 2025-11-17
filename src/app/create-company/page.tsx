@@ -124,15 +124,12 @@ function CreateCompanyContent() {
       setOk(true);
       setTimeout(() => {
         router.refresh();
-        // Redirect to billing if plan is selected, otherwise choose-plan
-        const storedPlan = typeof window !== 'undefined' 
-          ? localStorage.getItem('autodispatch_selected_plan')
-          : null;
-        if (storedPlan || planParam) {
-          const plan = planParam?.toUpperCase() || storedPlan || 'PRO';
-          router.push(`/billing?plan=${plan.toLowerCase()}`);
+        // Redirect to billing if plan in URL, else dashboard
+        if (planParam) {
+          const plan = planParam.toLowerCase();
+          router.push(`/billing?plan=${plan}`);
         } else {
-          router.push('/choose-plan');
+          router.push('/dashboard');
         }
       }, 800);
     } catch (e: any) {
