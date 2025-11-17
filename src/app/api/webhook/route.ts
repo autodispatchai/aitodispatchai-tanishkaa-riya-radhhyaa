@@ -115,9 +115,16 @@ export async function POST(req: NextRequest) {
       
       if (stripeSubscriptionId) {
         try {
-          const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId);
-          currentPeriodEnd = new Date(subscription.current_period_end * 1000).toISOString();
-          trialEnd = subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null;
+          const subscriptionResponse: any = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+          // Extract subscription data (handle both direct and wrapped responses)
+          const sub = subscriptionResponse?.data || subscriptionResponse;
+          
+          if (sub?.current_period_end) {
+            currentPeriodEnd = new Date(sub.current_period_end * 1000).toISOString();
+          }
+          if (sub?.trial_end) {
+            trialEnd = new Date(sub.trial_end * 1000).toISOString();
+          }
         } catch (err) {
           console.warn('[webhook] Could not retrieve subscription, using defaults');
           // Default to 30 days from now if monthly, 365 if yearly
