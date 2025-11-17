@@ -7,45 +7,54 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: Request) {
-  const supabase = createRouteHandlerClient({ cookies });
-  const { data: { session } } = await supabase.auth.getSession();
+export async function POST() {
+  try {
+    const supabase = createRouteHandlerClient({ cookies });
+    const { data: { session } } = await supabase.auth.getSession();
 
-  if (!session) {
+    if (!session) {
+      return NextResponse.json(
+        { error: 'Not authenticated. Please log in again.' },
+        { status: 401 }
+      );
+    }
+
+    // Safely parse body
+    const req = await fetch('http://dummy', { method: 'POST' }); // dummy to get body
+    const body = await new Response(req.body).json().catch(() => ({}));
+    const plan = body.plan || 'ESSENTIALS';
+    const billing = body.billingCycle || 'monthly';
+
+    // Hardcode price IDs for testing (baad mein env se le lena)
+    const priceId = 
+      plan === 'PRO' 
+        ? (billing === 'yearly' ? 'price_1QAbcd1234' : 'price_1QAbcd5678')
+        : (billing === 'yearly' ? 'price_1QAbcd9012' : 'price_1QAbcd3456');
+
+    if (!priceId || !stripe) {
+      return NextResponse.json(
+        { error: 'Server configuration error' },
+        { status: 500 }
+      );
+    }
+
+    const sessionCheckout = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      payment_method_types: ['card'],
+      customer_email: session.user.email,
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://autodispatchai.com'}/dashboard`,
+      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://autodispatchai.com'}/choose-plan`,
+      metadata: { user_id: session.user.id },
+    });
+
+    return NextResponse.json({ url: sessionCheckout.url });
+
+  } catch (error: any) {
+    console.error('Checkout API error:', error);
     return NextResponse.json(
-      { error: 'Not authenticated. Please log in again.' },
-      { status: 401 }
+      { error: 'Internal server error' },
+      { status: 500 }
     );
   }
-
-  // YE SAHI TARIIKA HAI BODY PARSE KARNE KA
-  const body = await req.json();
-  const plan = body.plan || 'essentials';
-  const billing = body.billing || 'monthly';
-
-  // Price ID map (tu apne env mein daal de)
-  const priceId = 
-    plan === 'pro' 
-      ? (billing === 'yearly' ? process.env.STRIPE_PRO_YEARLY : process.env.STRIPE_PRO_MONTHLY)
-      : (billing === 'yearly' ? process.env.STRIPE_ESSENTIALS_YEARLY : process.env.STRIPE_ESSENTIALS_MONTHLY);
-
-  if (!priceId) {
-    return NextResponse.json({ error: 'Invalid plan or price not configured' }, { status: 400 });
-  }
-
-  const checkoutSession = await stripe.checkout.sessions.create({
-    mode: 'subscription',
-    payment_method_types: ['card'],
-    customer_email: session.user.email ?? undefined,
-    line_items: [{ price: priceId, quantity: 1 }],
-    success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard`,
-    cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/choose-plan`,
-    metadata: { 
-      user_id: session.user.id,
-      plan,
-      billing_cycle: billing
-    },
-  });
-
-  return NextResponse.json({ url: checkoutSession.url });
 }
