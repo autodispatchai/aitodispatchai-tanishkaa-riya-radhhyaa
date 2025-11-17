@@ -3,7 +3,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import Stripe from 'stripe';
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
@@ -28,7 +28,22 @@ export async function POST(req: NextRequest) {
     }
 
     // 🔐 Supabase user from cookies (must be logged in)
-    const supabase = createServerComponentClient({ cookies });
+    const cookieStore = await cookies(); // 👈 Next 15/16: cookies() is async
+    
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value;
+          },
+          // No-ops for API routes; Supabase client requires these functions
+          set: () => {},
+          remove: () => {},
+        },
+      }
+    );
 
     const {
       data: { user },
