@@ -184,18 +184,36 @@ export async function POST(request: Request) {
 
   } catch (error: any) {
     console.error('[billing/checkout] ❌ ERROR:', error?.message);
+    console.error('[billing/checkout] Error type:', error?.constructor?.name);
     console.error('[billing/checkout] Stack:', error?.stack);
     
+    // Stripe-specific errors
     if (error?.type === 'StripeInvalidRequestError') {
-      console.error('[billing/checkout] Stripe error:', error.raw);
+      console.error('[billing/checkout] Stripe error details:', JSON.stringify(error.raw, null, 2));
       return NextResponse.json(
         { error: `Stripe error: ${error.message}` },
         { status: 400 }
       );
     }
 
+    // Network/connection errors
+    if (error?.code === 'ECONNREFUSED' || error?.code === 'ETIMEDOUT') {
+      console.error('[billing/checkout] Network error:', error.code);
+      return NextResponse.json(
+        { error: 'Connection to payment service failed. Please try again.' },
+        { status: 503 }
+      );
+    }
+
+    // Return detailed error in development, generic in production
+    const isDev = process.env.NODE_ENV === 'development';
     return NextResponse.json(
-      { error: 'Something went wrong. Please try again.' },
+      { 
+        error: isDev 
+          ? `Error: ${error?.message || 'Unknown error'}` 
+          : 'Something went wrong. Please try again.',
+        ...(isDev && { details: error?.stack }),
+      },
       { status: 500 }
     );
   }
