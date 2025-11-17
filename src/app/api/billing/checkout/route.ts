@@ -30,16 +30,32 @@ export async function POST(req: NextRequest) {
     const cookieStore = await cookies();
     const requestCookies = req.headers.get('cookie') || '';
     
+    // Get all cookies for debugging
+    const allCookies = cookieStore.getAll();
+    const cookieNames = allCookies.map(c => c.name);
+    console.log('[billing/checkout] Available cookies:', cookieNames);
+    console.log('[billing/checkout] Request cookie header present:', !!requestCookies);
+    
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
           get(name: string) {
+            // Try cookieStore first
             const cookieValue = cookieStore.get(name)?.value;
-            if (cookieValue) return cookieValue;
+            if (cookieValue) {
+              console.log(`[billing/checkout] Found cookie ${name} in cookieStore`);
+              return cookieValue;
+            }
+            // Fallback: parse from request cookie header
             const match = requestCookies.match(new RegExp(`(^| )${name}=([^;]+)`));
-            return match ? match[2] : undefined;
+            if (match) {
+              console.log(`[billing/checkout] Found cookie ${name} in request header`);
+              return match[2];
+            }
+            console.log(`[billing/checkout] Cookie ${name} not found`);
+            return undefined;
           },
           set: () => {},
           remove: () => {},
@@ -47,11 +63,12 @@ export async function POST(req: NextRequest) {
       }
     );
 
-    // Use getSession() instead of getUser() for better cookie compatibility
+    // Use getSession() for better cookie compatibility
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
     if (sessionError) {
       console.error('[billing/checkout] Session error:', sessionError);
+      console.error('[billing/checkout] Cookie names:', cookieNames);
       return NextResponse.json(
         { error: 'Not authenticated. Please log in again.' },
         { status: 401 }
@@ -60,6 +77,20 @@ export async function POST(req: NextRequest) {
 
     if (!session || !session.user) {
       console.error('[billing/checkout] No session found');
+      console.error('[billing/checkout] Cookie names:', cookieNames);
+      console.error('[billing/checkout] Request cookies:', requestCookies.substring(0, 200));
+      
+      // Try getUser() as fallback
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (user && !userError) {
+        console.log('[billing/checkout] Found user via getUser(), but no session - this is unusual');
+        // Still return error because we need a session for Stripe
+        return NextResponse.json(
+          { error: 'Session expired. Please refresh the page and try again.' },
+          { status: 401 }
+        );
+      }
+      
       return NextResponse.json(
         { error: 'Not authenticated. Please log in again.' },
         { status: 401 }

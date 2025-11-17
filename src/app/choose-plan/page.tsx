@@ -187,13 +187,19 @@ function ChoosePlanContent() {
       localStorage.setItem('autodispatch_addons', JSON.stringify(selectedAddOns));
     }
 
-    // Check if user is logged in
+    // Check if user is logged in and refresh session
     const supabase = createClient();
-    const { data: { session } } = await supabase.auth.getSession();
+    
+    // First, refresh the session to ensure cookies are up to date
+    await supabase.auth.refreshSession();
+    
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
     const planParam = selectedPlan.toLowerCase();
 
-    if (!session) {
+    if (sessionError || !session) {
+      console.error('[choose-plan] Session error:', sessionError);
+      setLoading(false);
       // User not logged in → go to signup
       window.location.href = `/signup?plan=${planParam}`;
       return;
