@@ -77,21 +77,26 @@ export async function POST(req: NextRequest) {
     }
 
     // 💰 Decide priceId based on plan + billingCycle
-    // TODO: replace with your real Stripe price IDs
+    // TODO: Replace with your real Stripe price IDs from Stripe Dashboard
+    // Get these from: Stripe Dashboard → Products → Your Product → Pricing
     const priceMap: Record<string, string> = {
-      // Example:
-      // 'ESSENTIALS_monthly': 'price_xxx',
-      // 'PRO_monthly': 'price_xxx',
-      // 'ENTERPRISE_monthly': 'price_xxx',
+      // Add your Stripe price IDs here:
+      // 'ESSENTIALS_monthly': 'price_xxxxxxxxxxxxx',
+      // 'ESSENTIALS_yearly': 'price_xxxxxxxxxxxxx',
+      // 'PRO_monthly': 'price_xxxxxxxxxxxxx',
+      // 'PRO_yearly': 'price_xxxxxxxxxxxxx',
     };
 
     const key = `${plan}_${billingCycle}`;
     const priceId = priceMap[key];
 
     if (!priceId) {
-      console.error('[checkout] Unknown plan key:', key);
+      console.error('[checkout] Missing Stripe price ID for:', key);
+      console.error('[checkout] Please add price IDs to priceMap in src/app/api/stripe/checkout/route.ts');
       return NextResponse.json(
-        { error: 'Invalid plan configuration' },
+        { 
+          error: `Stripe price ID not configured for ${plan} (${billingCycle}). Please contact support or configure price IDs.` 
+        },
         { status: 400 }
       );
     }

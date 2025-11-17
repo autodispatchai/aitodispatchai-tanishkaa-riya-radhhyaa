@@ -98,9 +98,14 @@ function BillingContent() {
 
       const json = await res.json();
       if (!res.ok) {
-        throw new Error(json?.error || 'Checkout failed');
+        const errorMsg = json?.error || 'Checkout failed';
+        console.error('[billing] Checkout API error:', errorMsg, json);
+        throw new Error(errorMsg);
       }
-      if (!json?.url) throw new Error('No checkout URL');
+      if (!json?.url) {
+        console.error('[billing] No checkout URL in response:', json);
+        throw new Error('No checkout URL received from server');
+      }
 
       // Clear localStorage after successful checkout redirect
       if (typeof window !== 'undefined') {
@@ -116,8 +121,30 @@ function BillingContent() {
     }
   }
 
-  // Show loading state while redirecting to Stripe
-  if (loading || (checkoutTriggered && plan && plan !== 'ENTERPRISE')) {
+  // Show loading state while redirecting to Stripe (but show error if exists)
+  if (err) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center px-4">
+        <div className="text-center max-w-md">
+          <div className="mb-4 text-red-600 text-5xl">⚠️</div>
+          <h2 className="text-xl font-bold text-neutral-900 mb-2">Checkout Error</h2>
+          <p className="text-neutral-600 mb-6">{err}</p>
+          <button
+            onClick={() => {
+              setErr(null);
+              setCheckoutTriggered(false);
+              setLoading(false);
+            }}
+            className="px-6 py-2 rounded-xl bg-neutral-900 text-white font-medium hover:bg-neutral-800"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading || (checkoutTriggered && plan && plan !== 'ENTERPRISE' && !err)) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
