@@ -212,21 +212,23 @@ function ChoosePlanContent() {
         }),
       });
 
-      // Check response status first
+      // Parse response once
+      const json = await res.json().catch(() => ({ error: 'Failed to parse response' }));
+      
+      // Check response status
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
-        const errorMsg = errorData?.error || `HTTP ${res.status}: ${res.statusText}`;
+        const errorMsg = json?.error || `HTTP ${res.status}: ${res.statusText}`;
         console.error('[choose-plan] ❌ API Error:', {
           status: res.status,
           statusText: res.statusText,
           error: errorMsg,
+          fullResponse: json,
         });
         alert(errorMsg);
         setLoading(false);
         return;
       }
 
-      const json = await res.json();
       console.log('[choose-plan] 📦 Full API Response:', json);
 
       if (!json?.url) {
