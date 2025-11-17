@@ -112,8 +112,8 @@ export async function POST(req: NextRequest) {
         billingCycle: billingCycle,
         addOns: addOns.join(','),
       },
-      success_url: `${DOMAIN_URL}/billing/choose-plan?status=success`,
-      cancel_url: `${DOMAIN_URL}/billing/choose-plan?status=cancel`,
+      success_url: `${DOMAIN_URL}/dashboard?payment=success`,
+      cancel_url: `${DOMAIN_URL}/choose-plan?payment=cancel`,
     });
 
     if (!session.url) {

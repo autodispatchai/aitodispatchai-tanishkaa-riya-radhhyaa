@@ -59,10 +59,14 @@ function AuthChecker({ router }: { router: any }) {
             if (subscription) {
               router.replace('/dashboard');
               return;
+            } else {
+              // Company exists but no subscription → redirect to choose-plan
+              router.replace('/choose-plan');
+              return;
             }
-          }
-          if (!company) {
-            router.replace('/create-company');
+          } else {
+            // No company → redirect to onboarding
+            router.replace('/onboarding/create-company');
             return;
           }
         }
@@ -88,10 +92,10 @@ function AuthChecker({ router }: { router: any }) {
               if (subscription) {
                 router.replace('/dashboard');
               } else {
-                router.replace('/create-company');
+                router.replace('/choose-plan');
               }
             } else {
-              router.replace('/create-company');
+              router.replace('/onboarding/create-company');
             }
           }
         }
@@ -116,10 +120,10 @@ function AuthChecker({ router }: { router: any }) {
               if (subscription) {
                 router.replace('/dashboard');
               } else {
-                router.replace('/create-company');
+                router.replace('/choose-plan');
               }
             } else {
-              router.replace('/create-company');
+              router.replace('/onboarding/create-company');
             }
           }
         });

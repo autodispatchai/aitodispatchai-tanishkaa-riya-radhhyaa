@@ -23,6 +23,46 @@ function SignupContent() {
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
 
+  // Check if user already logged in → redirect to correct stage
+  useEffect(() => {
+    const checkAuth = async () => {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        const { data: company } = await supabase
+          .from('companies')
+          .select('id')
+          .eq('owner_id', session.user.id)
+          .maybeSingle();
+
+        if (company) {
+          const { data: subscription } = await supabase
+            .from('subscriptions')
+            .select('status')
+            .eq('company_id', company.id)
+            .eq('status', 'active')
+            .maybeSingle();
+
+          if (subscription) {
+            router.replace('/dashboard');
+          } else {
+            // Company exists but no subscription → redirect to billing or choose-plan
+            if (planParam) {
+              router.replace(`/billing?plan=${planParam}`);
+            } else {
+              router.replace('/choose-plan');
+            }
+          }
+        } else {
+          // No company → redirect to onboarding
+          router.replace('/onboarding/create-company');
+        }
+      }
+    };
+    checkAuth();
+  }, [router, planParam]);
+
   // Store plan in localStorage if provided
   useEffect(() => {
     if (planParam && typeof window !== 'undefined') {
@@ -60,8 +100,8 @@ function SignupContent() {
       const supabase = createClient();
 
       const redirectUrl = planParam 
-        ? `${SITE_URL}/create-company?plan=${planParam}`
-        : `${SITE_URL}/create-company`;
+        ? `${SITE_URL}/onboarding/create-company?plan=${planParam}`
+        : `${SITE_URL}/onboarding/create-company`;
 
       const { error } = await supabase.auth.signUp({
         email: form.email.trim(),
@@ -93,8 +133,8 @@ function SignupContent() {
       const supabase = createClient();
 
       const redirectUrl = planParam 
-        ? `${SITE_URL}/create-company?plan=${planParam}`
-        : `${SITE_URL}/create-company`;
+        ? `${SITE_URL}/onboarding/create-company?plan=${planParam}`
+        : `${SITE_URL}/onboarding/create-company`;
 
       await supabase.auth.signInWithOAuth({
         provider,

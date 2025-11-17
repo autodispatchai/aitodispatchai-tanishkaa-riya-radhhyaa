@@ -17,8 +17,17 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  // AFTER LOGIN → CHECK COMPANY
-  if (session && (url.pathname === '/' || url.pathname.startsWith('/signup'))) {
+  // AFTER LOGIN → RESUME FLOW
+  if (session) {
+    // Skip redirect if already on correct page
+    if (url.pathname.startsWith('/dashboard') || 
+        url.pathname.startsWith('/billing') || 
+        url.pathname.startsWith('/onboarding/create-company') ||
+        url.pathname.startsWith('/choose-plan') ||
+        url.pathname.startsWith('/api')) {
+      return res;
+    }
+
     const { data: company } = await supabase
       .from('companies')
       .select('id')
@@ -35,11 +44,28 @@ export async function middleware(req: NextRequest) {
         .maybeSingle();
 
       if (subscription) {
-        return NextResponse.redirect(new URL('/dashboard', req.url));
+        // User has active subscription → redirect to dashboard
+        if (url.pathname === '/' || url.pathname.startsWith('/signup') || url.pathname.startsWith('/login')) {
+          return NextResponse.redirect(new URL('/dashboard', req.url));
+        }
+      } else {
+        // Company exists but no active subscription → redirect to choose-plan
+        if (url.pathname === '/' || url.pathname.startsWith('/signup') || url.pathname.startsWith('/login')) {
+          return NextResponse.redirect(new URL('/choose-plan', req.url));
+        }
+      }
+    } else {
+      // No company → redirect to onboarding
+      if (url.pathname === '/' || url.pathname.startsWith('/signup') || url.pathname.startsWith('/login')) {
+        return NextResponse.redirect(new URL('/onboarding/create-company', req.url));
       }
     }
-    if (!company && url.pathname !== '/create-company') {
-      return NextResponse.redirect(new URL('/create-company', req.url));
+  }
+
+  // PROTECT BILLING ROUTE (requires auth)
+  if (url.pathname.startsWith('/billing')) {
+    if (!session) {
+      return NextResponse.redirect(new URL('/login', req.url));
     }
   }
 

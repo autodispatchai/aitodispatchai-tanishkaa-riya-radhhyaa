@@ -174,7 +174,7 @@ function ChoosePlanContent() {
     }
   }, [billing, selectedPlan]);
 
-  function handleChoosePlan() {
+  async function handleChoosePlan() {
     // Store plan selection in localStorage
     if (typeof window !== 'undefined') {
       localStorage.setItem('autodispatch_selected_plan', selectedPlan);
@@ -182,9 +182,19 @@ function ChoosePlanContent() {
       localStorage.setItem('autodispatch_addons', JSON.stringify(selectedAddOns));
     }
 
-    // Redirect to signup with plan param
+    // Check if user is logged in
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+
     const planParam = selectedPlan.toLowerCase();
-    window.location.href = `/signup?plan=${planParam}`;
+
+    if (session) {
+      // User is logged in → go directly to billing
+      window.location.href = `/billing?plan=${planParam}`;
+    } else {
+      // User not logged in → go to signup
+      window.location.href = `/signup?plan=${planParam}`;
+    }
   }
 
   return (

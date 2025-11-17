@@ -53,6 +53,9 @@ export default function LoginPage() {
               window.location.href = '/choose-plan';
             }
           }
+        } else {
+          // No company → redirect to onboarding
+          window.location.href = '/onboarding/create-company';
         }
       }
     });
@@ -88,6 +91,9 @@ export default function LoginPage() {
               window.location.href = '/choose-plan';
             }
           }
+        } else {
+          // No company → redirect to onboarding
+          window.location.href = '/onboarding/create-company';
         }
       }
     });
@@ -168,6 +174,9 @@ export default function LoginPage() {
             window.location.href = '/choose-plan';
           }
         }
+      } else {
+        // No company → redirect to onboarding
+        window.location.href = '/onboarding/create-company';
       }
     } catch (e: any) {
       setErr(

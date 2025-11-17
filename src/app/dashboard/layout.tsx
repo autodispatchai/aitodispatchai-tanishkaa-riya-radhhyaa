@@ -28,7 +28,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
     .maybeSingle();
 
   if (!company) {
-    redirect('/create-company');
+    redirect('/onboarding/create-company');
   }
 
   // Check subscription status from subscriptions table
