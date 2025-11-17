@@ -135,6 +135,7 @@ export async function POST(request: Request) {
     // 10. Create Stripe session
     console.log('[billing/checkout] 💳 Creating Stripe session...');
     
+    // Create Stripe checkout session with trial period
     const checkoutSession = await stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
@@ -142,19 +143,20 @@ export async function POST(request: Request) {
       line_items: lineItems,
       success_url: `${BASE_URL}/dashboard?payment=success`,
       cancel_url: `${BASE_URL}/choose-plan?payment=cancel`,
-      metadata: {
-        user_id: session.user.id,
-        plan,
-        billing: billingCycle, // Webhook expects 'billing' not 'billing_cycle'
-        addOns: addedAddOns.join(','), // Webhook expects 'addOns' not 'addons'
-      },
       subscription_data: {
+        trial_period_days: 14, // 14-day free trial
         metadata: {
           user_id: session.user.id,
           plan,
-          billing: billingCycle, // Webhook expects 'billing' not 'billing_cycle'
-          addOns: addedAddOns.join(','), // Webhook expects 'addOns' not 'addons'
+          billing: billingCycle,
+          addOns: addedAddOns.join(','),
         },
+      },
+      metadata: {
+        user_id: session.user.id,
+        plan,
+        billing: billingCycle,
+        addOns: addedAddOns.join(','),
       },
     });
 
