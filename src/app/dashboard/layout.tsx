@@ -23,11 +23,23 @@ export default async function Layout({ children }: { children: React.ReactNode }
 
   const { data: company } = await supabase
     .from('companies')
-    .select('subscription_status')
-    .eq('user_id', session.user.id)
+    .select('id')
+    .eq('owner_id', session.user.id)
     .maybeSingle();
 
-  if (!company || company.subscription_status !== 'active') {
+  if (!company) {
+    redirect('/create-company');
+  }
+
+  // Check subscription status from subscriptions table
+  const { data: subscription } = await supabase
+    .from('subscriptions')
+    .select('status')
+    .eq('company_id', company.id)
+    .eq('status', 'active')
+    .maybeSingle();
+
+  if (!subscription) {
     redirect('/choose-plan');
   }
 

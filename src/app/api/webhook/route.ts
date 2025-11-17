@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
       // Find company by email
       const { data: company, error: companyError } = await supabaseAdmin
         .from('companies')
-        .select('id, user_id')
+        .select('id, owner_id')
         .eq('email', customerEmail)
         .maybeSingle();
 
@@ -95,19 +95,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Update company subscription_status to 'active'
-      const { error: updateError } = await supabaseAdmin
-        .from('companies')
-        .update({ subscription_status: 'active' })
-        .eq('id', company.id);
-
-      if (updateError) {
-        console.error('[webhook] Failed to update company:', updateError);
-        return NextResponse.json(
-          { error: 'Failed to update company' },
-          { status: 500 }
-        );
-      }
+      // No need to update companies table - subscription status is in subscriptions table
 
       // Get subscription details from Stripe (if subscription ID exists)
       let currentPeriodEnd: string | null = null;
@@ -138,11 +126,10 @@ export async function POST(req: NextRequest) {
         .upsert(
           {
             company_id: company.id,
-            user_id: company.user_id,
+            user_id: company.owner_id,
             stripe_customer_id: stripeCustomerId,
             stripe_subscription_id: stripeSubscriptionId,
             plan,
-            billing_cycle: billing,
             add_ons: addOns,
             status: 'active',
             trial_ends_at: trialEnd,

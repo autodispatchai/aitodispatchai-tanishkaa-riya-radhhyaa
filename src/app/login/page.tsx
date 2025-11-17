@@ -28,13 +28,21 @@ export default function LoginPage() {
         // Check if user has a company and subscription
         const { data: company } = await supabase
           .from('companies')
-          .select('subscription_status')
-          .eq('user_id', session.user.id)
+          .select('id')
+          .eq('owner_id', session.user.id)
           .maybeSingle();
 
-        if (company?.subscription_status === 'active') {
-          window.location.href = '/dashboard';
-        } else {
+        if (company) {
+          const { data: subscription } = await supabase
+            .from('subscriptions')
+            .select('status')
+            .eq('company_id', company.id)
+            .eq('status', 'active')
+            .maybeSingle();
+
+          if (subscription) {
+            window.location.href = '/dashboard';
+          } else {
           // Check for stored plan and redirect to billing
           const storedPlan = typeof window !== 'undefined'
             ? localStorage.getItem('autodispatch_selected_plan')
@@ -54,13 +62,21 @@ export default function LoginPage() {
         // Check if user has a company and subscription
         const { data: company } = await supabase
           .from('companies')
-          .select('subscription_status')
-          .eq('user_id', session.user.id)
+          .select('id')
+          .eq('owner_id', session.user.id)
           .maybeSingle();
 
-        if (company?.subscription_status === 'active') {
-          window.location.href = '/dashboard';
-        } else {
+        if (company) {
+          const { data: subscription } = await supabase
+            .from('subscriptions')
+            .select('status')
+            .eq('company_id', company.id)
+            .eq('status', 'active')
+            .maybeSingle();
+
+          if (subscription) {
+            window.location.href = '/dashboard';
+          } else {
           // Check for stored plan and redirect to billing
           const storedPlan = typeof window !== 'undefined'
             ? localStorage.getItem('autodispatch_selected_plan')
@@ -117,15 +133,26 @@ export default function LoginPage() {
       else localStorage.removeItem(REMEMBER_KEY);
 
       // Check if user has a company and subscription
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
       const { data: company } = await supabase
         .from('companies')
-        .select('subscription_status')
-        .eq('user_id', (await supabase.auth.getUser()).data.user!.id)
+        .select('id')
+        .eq('owner_id', user.id)
         .maybeSingle();
 
-      if (company?.subscription_status === 'active') {
-        window.location.href = '/dashboard';
-      } else {
+      if (company) {
+        const { data: subscription } = await supabase
+          .from('subscriptions')
+          .select('status')
+          .eq('company_id', company.id)
+          .eq('status', 'active')
+          .maybeSingle();
+
+        if (subscription) {
+          window.location.href = '/dashboard';
+        } else {
         // Check for stored plan and redirect to billing
         const storedPlan = typeof window !== 'undefined'
           ? localStorage.getItem('autodispatch_selected_plan')

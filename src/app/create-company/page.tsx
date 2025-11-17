@@ -68,14 +68,22 @@ function CreateCompanyContent() {
       // DUPLICATE COMPANY CHECK
       const { data: existingCompany, error: checkError } = await supabase
         .from('companies')
-        .select('id, subscription_status')
-        .eq('user_id', session.user.id) // CHANGE TO owner_id IF NEEDED
+        .select('id')
+        .eq('owner_id', session.user.id)
         .maybeSingle();
 
       if (checkError && checkError.code !== 'PGRST116') throw checkError;
 
       if (existingCompany) {
-        if (existingCompany.subscription_status === 'active') {
+        // Check subscription status from subscriptions table
+        const { data: subscription } = await supabase
+          .from('subscriptions')
+          .select('status')
+          .eq('company_id', existingCompany.id)
+          .eq('status', 'active')
+          .maybeSingle();
+
+        if (subscription) {
           router.replace('/dashboard');
         } else {
           // Redirect to billing if plan is selected, otherwise choose-plan
@@ -94,7 +102,7 @@ function CreateCompanyContent() {
 
       // INSERT COMPANY
       const { error } = await supabase.from('companies').insert([{
-        user_id: session.user.id, // CHANGE TO owner_id IF NEEDED
+        owner_id: session.user.id,
         company_name: companyName.trim(),
         legal_name: legalName.trim() || null,
         email: email.trim(),
@@ -115,7 +123,7 @@ function CreateCompanyContent() {
 
       setOk(true);
       setTimeout(() => {
-        router.refresh(); // REFRESH SESSION
+        router.refresh();
         // Redirect to billing if plan is selected, otherwise choose-plan
         const storedPlan = typeof window !== 'undefined' 
           ? localStorage.getItem('autodispatch_selected_plan')
@@ -306,7 +314,7 @@ function CreateCompanyContent() {
                   className="mt-0.5 h-4 w-4 rounded border-neutral-300 text-purple-600 focus:ring-purple-500"
                 />
                 <span className="text-neutral-700">
-                  I’d like to receive product updates and onboarding emails. (Optional)
+                  I'd like to receive product updates and onboarding emails. (Optional)
                 </span>
               </label>
             </div>
@@ -330,26 +338,21 @@ function CreateCompanyContent() {
                   exit={{ opacity: 0, y: -10 }}
                   className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700"
                 >
-                  Company created successfully! Redirecting to plan selection...
+                  Company created! Redirecting...
                 </motion.div>
               )}
             </AnimatePresence>
 
             {/* Submit */}
-            <div className="pt-4">
-              <button
-                type="submit"
-                disabled={loading || !agreeTos}
-                className="w-full h-12 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500 px-6 font-semibold text-white shadow-md hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed transition flex items-center justify-center gap-2"
-              >
-                {loading ? (
-                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                ) : 'Continue to Choose Plan'}
-              </button>
-            </div>
+            <motion.button
+              whileHover={{ scale: loading ? 1 : 1.01 }}
+              whileTap={{ scale: loading ? 1 : 0.98 }}
+              disabled={loading}
+              type="submit"
+              className="w-full h-12 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500 text-white font-semibold tracking-tight shadow-md disabled:opacity-60 flex items-center justify-center gap-2 hover:opacity-90"
+            >
+              {loading ? 'Creating...' : 'Continue to Choose Plan'}
+            </motion.button>
           </form>
         </div>
       </main>
@@ -359,17 +362,16 @@ function CreateCompanyContent() {
 
 export default function CreateCompanyPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen flex items-center justify-center bg-white">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-purple-600 mx-auto mb-4"></div>
-            <p className="text-xl font-medium">Loading...</p>
-          </div>
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-purple-600 mx-auto mb-4"></div>
+          <p className="text-xl font-medium">Loading...</p>
         </div>
-      }
-    >
+      </div>
+    }>
       <CreateCompanyContent />
     </Suspense>
   );
 }
+

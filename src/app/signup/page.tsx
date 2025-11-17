@@ -60,8 +60,8 @@ function SignupContent() {
       const supabase = createClient();
 
       const redirectUrl = planParam 
-        ? `${SITE_URL}/signup/create-company?plan=${planParam}`
-        : `${SITE_URL}/signup/create-company`;
+        ? `${SITE_URL}/create-company?plan=${planParam}`
+        : `${SITE_URL}/create-company`;
 
       const { error } = await supabase.auth.signUp({
         email: form.email.trim(),
@@ -93,8 +93,8 @@ function SignupContent() {
       const supabase = createClient();
 
       const redirectUrl = planParam 
-        ? `${SITE_URL}/signup/create-company?plan=${planParam}`
-        : `${SITE_URL}/signup/create-company`;
+        ? `${SITE_URL}/create-company?plan=${planParam}`
+        : `${SITE_URL}/create-company`;
 
       await supabase.auth.signInWithOAuth({
         provider,

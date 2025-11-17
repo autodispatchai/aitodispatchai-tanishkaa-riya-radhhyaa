@@ -21,15 +21,25 @@ export async function middleware(req: NextRequest) {
   if (session && (url.pathname === '/' || url.pathname.startsWith('/signup'))) {
     const { data: company } = await supabase
       .from('companies')
-      .select('subscription_status')
-      .eq('user_id', session.user.id)
+      .select('id')
+      .eq('owner_id', session.user.id)
       .maybeSingle();
 
-    if (company?.subscription_status === 'active') {
-      return NextResponse.redirect(new URL('/dashboard', req.url));
+    if (company) {
+      // Check subscription status from subscriptions table
+      const { data: subscription } = await supabase
+        .from('subscriptions')
+        .select('status')
+        .eq('company_id', company.id)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (subscription) {
+        return NextResponse.redirect(new URL('/dashboard', req.url));
+      }
     }
-    if (!company && url.pathname !== '/signup/create-company') {
-      return NextResponse.redirect(new URL('/signup/create-company', req.url));
+    if (!company && url.pathname !== '/create-company') {
+      return NextResponse.redirect(new URL('/create-company', req.url));
     }
   }
 

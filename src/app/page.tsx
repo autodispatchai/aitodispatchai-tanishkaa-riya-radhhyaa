@@ -44,16 +44,25 @@ function AuthChecker({ router }: { router: any }) {
         if (session) {
           const { data: company } = await supabase
             .from('companies')
-            .select('id, subscription_status')
-            .eq('user_id', session.user.id)
+            .select('id')
+            .eq('owner_id', session.user.id)
             .maybeSingle();
 
-          if (company?.subscription_status === 'active') {
-            router.replace('/dashboard');
-            return;
+          if (company) {
+            const { data: subscription } = await supabase
+              .from('subscriptions')
+              .select('status')
+              .eq('company_id', company.id)
+              .eq('status', 'active')
+              .maybeSingle();
+
+            if (subscription) {
+              router.replace('/dashboard');
+              return;
+            }
           }
           if (!company) {
-            router.replace('/signup/create-company');
+            router.replace('/create-company');
             return;
           }
         }
@@ -64,14 +73,25 @@ function AuthChecker({ router }: { router: any }) {
           if (newSession) {
             const { data: company } = await supabase
               .from('companies')
-              .select('subscription_status')
-              .eq('user_id', newSession.user.id)
+              .select('id')
+              .eq('owner_id', newSession.user.id)
               .maybeSingle();
 
-            if (company?.subscription_status === 'active') {
-              router.replace('/dashboard');
+            if (company) {
+              const { data: subscription } = await supabase
+                .from('subscriptions')
+                .select('status')
+                .eq('company_id', company.id)
+                .eq('status', 'active')
+                .maybeSingle();
+
+              if (subscription) {
+                router.replace('/dashboard');
+              } else {
+                router.replace('/create-company');
+              }
             } else {
-              router.replace('/signup/create-company');
+              router.replace('/create-company');
             }
           }
         }
@@ -81,14 +101,25 @@ function AuthChecker({ router }: { router: any }) {
             checkedRef.current = true;
             const { data: company } = await supabase
               .from('companies')
-              .select('subscription_status')
-              .eq('user_id', session.user.id)
+              .select('id')
+              .eq('owner_id', session.user.id)
               .maybeSingle();
 
-            if (company?.subscription_status === 'active') {
-              router.replace('/dashboard');
+            if (company) {
+              const { data: subscription } = await supabase
+                .from('subscriptions')
+                .select('status')
+                .eq('company_id', company.id)
+                .eq('status', 'active')
+                .maybeSingle();
+
+              if (subscription) {
+                router.replace('/dashboard');
+              } else {
+                router.replace('/create-company');
+              }
             } else {
-              router.replace('/signup/create-company');
+              router.replace('/create-company');
             }
           }
         });
