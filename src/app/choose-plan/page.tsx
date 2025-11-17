@@ -96,8 +96,7 @@ function pct(discount: number): number {
 function ChoosePlanContent() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
-  
-  // Check auth status
+
   useEffect(() => {
     const checkAuth = async () => {
       const supabase = createClient();
@@ -107,7 +106,6 @@ function ChoosePlanContent() {
     checkAuth();
   }, []);
 
-  // Load from localStorage on mount
   const [billing, setBilling] = useState<BillingCycle>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('autodispatch_billing');
@@ -115,6 +113,7 @@ function ChoosePlanContent() {
     }
     return 'monthly';
   });
+
   const [selectedPlan, setSelectedPlan] = useState<PlanName>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('autodispatch_plan');
@@ -122,6 +121,7 @@ function ChoosePlanContent() {
     }
     return 'PRO';
   });
+
   const [selectedAddOns, setSelectedAddOns] = useState<Record<string, boolean>>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('autodispatch_addons');
@@ -167,7 +167,6 @@ function ChoosePlanContent() {
     });
   }
 
-  // Persist billing and plan changes
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('autodispatch_billing', billing);
@@ -175,51 +174,37 @@ function ChoosePlanContent() {
     }
   }, [billing, selectedPlan]);
 
+  // FINAL FIXED handleChoosePlan — YE HI SABSE ZAROORI HAI
   async function handleChoosePlan() {
     if (loading) return;
-    
     setLoading(true);
-    
-    // Store plan selection in localStorage
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('autodispatch_selected_plan', selectedPlan);
-      localStorage.setItem('autodispatch_billing', billing);
-      localStorage.setItem('autodispatch_addons', JSON.stringify(selectedAddOns));
-    }
 
-    // Check if user is logged in and refresh session
+    localStorage.setItem('autodispatch_selected_plan', selectedPlan);
+    localStorage.setItem('autodispatch_billing', billing);
+    localStorage.setItem('autodispatch_addons', JSON.stringify(selectedAddOns));
+
     const supabase = createClient();
-    
-    // First, refresh the session to ensure cookies are up to date
-    await supabase.auth.refreshSession();
-    
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    const { data: { session } } = await supabase.auth.getSession();
 
-    const planParam = selectedPlan.toLowerCase();
-
-    if (sessionError || !session) {
-      console.error('[choose-plan] Session error:', sessionError);
+    if (!session) {
       setLoading(false);
-      // User not logged in → go to signup
-      window.location.href = `/signup?plan=${planParam}`;
+      window.location.href = `/signup?plan=${selectedPlan.toLowerCase()}`;
       return;
     }
 
-    // User is logged in → directly create Stripe checkout session
     if (selectedPlan === 'ENTERPRISE') {
       window.location.href = 'https://calendly.com/autodispatchai/enterprise?utm_source=website&utm_medium=billing';
       return;
     }
 
     try {
-      // Get selected add-ons
       const chosenAddOnIds = Object.keys(selectedAddOns).filter(k => selectedAddOns[k]);
 
-      // Create Stripe checkout session directly
       const res = await fetch('/api/billing/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        cache: 'no-store', // YE LINE DAAL DIYI — ERROR KHATAM!
         body: JSON.stringify({
           plan: selectedPlan,
           billingCycle: billing,
@@ -228,35 +213,21 @@ function ChoosePlanContent() {
       });
 
       const json = await res.json();
-      
-      if (!res.ok) {
-        const errorMsg = json?.error || 'Checkout failed';
-        console.error('[choose-plan] Checkout API error:', errorMsg);
+
+      if (!res.ok || !json?.url) {
+        alert(json?.error || 'Payment failed. Please try again.');
         setLoading(false);
-        alert(errorMsg || 'Payment failed. Please try again.');
         return;
       }
 
-      if (!json?.url) {
-        console.error('[choose-plan] No checkout URL in response:', json);
-        setLoading(false);
-        alert('Payment failed. Please try again.');
-        return;
-      }
-
-      // Clear localStorage after successful checkout redirect
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('autodispatch_selected_plan');
-        localStorage.removeItem('autodispatch_billing');
-        localStorage.removeItem('autodispatch_addons');
-      }
-
-      // Redirect directly to Stripe checkout
+      localStorage.removeItem('autodispatch_selected_plan');
+      localStorage.removeItem('autodispatch_billing');
+      localStorage.removeItem('autodispatch_addons');
       window.location.href = json.url;
-    } catch (error: any) {
-      console.error('[choose-plan] Checkout error:', error);
+    } catch (error) {
+      console.error('Checkout error:', error);
+      alert('Network error. Please try again.');
       setLoading(false);
-      alert(error?.message || 'Payment failed. Please try again.');
     }
   }
 
@@ -304,7 +275,6 @@ function ChoosePlanContent() {
               </div>
             )}
           </div>
-
 
           {/* PLANS GRID */}
           <div className="grid md:grid-cols-3 gap-6">
@@ -408,7 +378,6 @@ function ChoosePlanContent() {
           </div>
         </section>
 
-        {/* SUMMARY SIDEBAR */}
         <aside className="sticky top-6 h-fit border rounded-2xl p-6 shadow-sm">
           <h3 className="text-lg font-semibold">Summary</h3>
           <p className="text-sm text-neutral-500">Per truck • {isEnterprise ? 'Custom' : (billing === 'yearly' ? 'Yearly' : 'Monthly')} billing</p>
@@ -432,17 +401,14 @@ function ChoosePlanContent() {
               <span>{isEnterprise ? 'Contact Sales' : `$${grandTotal}`}</span>
             </div>
           </div>
+
           {isLoggedIn === false ? (
             <div className="mt-5 space-y-3">
               <Link
                 href={`/signup?plan=${selectedPlan.toLowerCase()}`}
                 className="block h-11 w-full rounded-xl font-semibold tracking-tight bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500 text-white hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
               >
-                {plan.name === 'ENTERPRISE' ? (
-                  'Talk to Our Team'
-                ) : (
-                  'Start Free Trial'
-                )}
+                {plan.name === 'ENTERPRISE' ? 'Talk to Our Team' : 'Start Free Trial'}
               </Link>
               <div className="text-center">
                 <p className="text-xs text-neutral-500">
