@@ -87,15 +87,8 @@ function CreateCompanyContent() {
           router.replace('/dashboard');
         } else {
           // Redirect to billing if plan is selected, otherwise choose-plan
-          const storedPlan = typeof window !== 'undefined' 
-            ? localStorage.getItem('autodispatch_selected_plan')
-            : null;
-          if (storedPlan || planParam) {
-            const plan = planParam?.toUpperCase() || storedPlan || 'PRO';
-            router.replace(`/billing?plan=${plan.toLowerCase()}`);
-          } else {
-            router.replace('/choose-plan');
-          }
+          // Redirect to choose-plan (billing page removed)
+          router.replace('/choose-plan');
         }
         return;
       }
@@ -124,13 +117,8 @@ function CreateCompanyContent() {
       setOk(true);
       setTimeout(() => {
         router.refresh();
-        // Redirect to billing if plan in URL, else dashboard
-        if (planParam) {
-          const plan = planParam.toLowerCase();
-          router.push(`/billing?plan=${plan}`);
-        } else {
-          router.push('/dashboard');
-        }
+        // Redirect to choose-plan (billing page removed)
+        router.push('/choose-plan');
       }, 800);
     } catch (e: any) {
       setErr(e?.message || 'Failed to save company. Try again.');

@@ -47,12 +47,8 @@ function SignupContent() {
           if (subscription) {
             router.replace('/dashboard');
           } else {
-            // Company exists but no subscription → redirect to billing or choose-plan
-            if (planParam) {
-              router.replace(`/billing?plan=${planParam}`);
-            } else {
-              router.replace('/choose-plan');
-            }
+            // Company exists but no subscription → redirect to choose-plan
+            router.replace('/choose-plan');
           }
         } else {
           // No company → redirect to onboarding

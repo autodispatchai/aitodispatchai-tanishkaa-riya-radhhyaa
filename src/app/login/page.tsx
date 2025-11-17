@@ -43,15 +43,8 @@ export default function LoginPage() {
           if (subscription) {
             window.location.href = '/dashboard';
           } else {
-            // Check for stored plan and redirect to billing
-            const storedPlan = typeof window !== 'undefined'
-              ? localStorage.getItem('autodispatch_selected_plan')
-              : null;
-            if (storedPlan) {
-              window.location.href = `/billing?plan=${storedPlan.toLowerCase()}`;
-            } else {
-              window.location.href = '/choose-plan';
-            }
+            // Redirect to choose-plan (billing page removed)
+            window.location.href = '/choose-plan';
           }
         } else {
           // No company → redirect to onboarding
@@ -81,15 +74,8 @@ export default function LoginPage() {
           if (subscription) {
             window.location.href = '/dashboard';
           } else {
-            // Check for stored plan and redirect to billing
-            const storedPlan = typeof window !== 'undefined'
-              ? localStorage.getItem('autodispatch_selected_plan')
-              : null;
-            if (storedPlan) {
-              window.location.href = `/billing?plan=${storedPlan.toLowerCase()}`;
-            } else {
-              window.location.href = '/choose-plan';
-            }
+            // Redirect to choose-plan (billing page removed)
+            window.location.href = '/choose-plan';
           }
         } else {
           // No company → redirect to onboarding

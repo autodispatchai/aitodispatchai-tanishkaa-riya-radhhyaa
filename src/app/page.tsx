@@ -183,6 +183,9 @@ export default function LandingPage() {
           </span>
         </div>
         <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
+          <a href="/choose-plan" className="px-7 py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-fuchsia-500 text-white font-semibold hover:opacity-90 transition-opacity text-base">
+            Choose Plan
+          </a>
           <a href="/signup" className="px-7 py-3.5 rounded-xl bg-neutral-900 text-white font-semibold hover:bg-neutral-800 text-base">
             Start 14-Day Trial
           </a>

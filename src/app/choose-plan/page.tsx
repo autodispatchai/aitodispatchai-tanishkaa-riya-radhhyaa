@@ -227,16 +227,14 @@ function ChoosePlanContent() {
         const errorMsg = json?.error || 'Checkout failed';
         console.error('[choose-plan] Checkout API error:', errorMsg);
         setLoading(false);
-        // Fallback to billing page if checkout fails
-        window.location.href = `/billing?plan=${planParam}`;
+        alert(errorMsg || 'Payment failed. Please try again.');
         return;
       }
 
       if (!json?.url) {
         console.error('[choose-plan] No checkout URL in response:', json);
         setLoading(false);
-        // Fallback to billing page
-        window.location.href = `/billing?plan=${planParam}`;
+        alert('Payment failed. Please try again.');
         return;
       }
 
@@ -252,8 +250,7 @@ function ChoosePlanContent() {
     } catch (error: any) {
       console.error('[choose-plan] Checkout error:', error);
       setLoading(false);
-      // Fallback to billing page on error
-      window.location.href = `/billing?plan=${planParam}`;
+      alert(error?.message || 'Payment failed. Please try again.');
     }
   }
 
@@ -438,7 +435,7 @@ function ChoosePlanContent() {
                 {plan.name === 'ENTERPRISE' ? (
                   'Talk to Our Team'
                 ) : (
-                  `Sign up for ${plan.name} Plan`
+                  'Start Free Trial'
                 )}
               </Link>
               <div className="text-center">
@@ -465,7 +462,7 @@ function ChoosePlanContent() {
                 ) : plan.name === 'ENTERPRISE' ? (
                   'Talk to Our Team'
                 ) : (
-                  `Choose ${plan.name} Plan`
+                  'Subscribe Now'
                 )}
               </button>
               <p className="text-xs text-neutral-500 mt-3 text-center">

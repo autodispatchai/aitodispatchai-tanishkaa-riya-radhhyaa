@@ -87,15 +87,8 @@ function CreateCompanyContent() {
           router.replace('/dashboard');
         } else {
           // Redirect to billing if plan is selected, otherwise choose-plan
-          const storedPlan = typeof window !== 'undefined' 
-            ? localStorage.getItem('autodispatch_selected_plan')
-            : null;
-          if (storedPlan || planParam) {
-            const plan = planParam?.toUpperCase() || storedPlan || 'PRO';
-            router.replace(`/billing?plan=${plan.toLowerCase()}`);
-          } else {
-            router.replace('/choose-plan');
-          }
+          // Redirect to choose-plan (billing page removed)
+          router.replace('/choose-plan');
         }
         return;
       }

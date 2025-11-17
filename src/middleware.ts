@@ -21,7 +21,6 @@ export async function middleware(req: NextRequest) {
   if (session) {
     // Skip redirect if already on correct page
     if (url.pathname.startsWith('/dashboard') || 
-        url.pathname.startsWith('/billing') || 
         url.pathname.startsWith('/onboarding/create-company') ||
         url.pathname.startsWith('/choose-plan') ||
         url.pathname.startsWith('/api')) {
@@ -62,11 +61,9 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  // PROTECT BILLING ROUTE (requires auth)
+  // Redirect /billing to /choose-plan (billing page removed)
   if (url.pathname.startsWith('/billing')) {
-    if (!session) {
-      return NextResponse.redirect(new URL('/login', req.url));
-    }
+    return NextResponse.redirect(new URL('/choose-plan', req.url));
   }
 
   return res;
