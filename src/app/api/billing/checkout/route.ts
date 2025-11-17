@@ -7,54 +7,43 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 export const dynamic = 'force-dynamic';
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
     const supabase = createRouteHandlerClient({ cookies });
     const { data: { session } } = await supabase.auth.getSession();
 
     if (!session) {
-      return NextResponse.json(
-        { error: 'Not authenticated. Please log in again.' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    // Safely parse body
-    const req = await fetch('http://dummy', { method: 'POST' }); // dummy to get body
-    const body = await new Response(req.body).json().catch(() => ({}));
+    const body = await request.json();
     const plan = body.plan || 'ESSENTIALS';
     const billing = body.billingCycle || 'monthly';
 
-    // Hardcode price IDs for testing (baad mein env se le lena)
+    // YE PRICE IDs TERE STRIPE DASHBOARD SE LE — MAIN NE REAL EXAMPLES DIYA HAI
     const priceId = 
       plan === 'PRO' 
-        ? (billing === 'yearly' ? 'price_1QAbcd1234' : 'price_1QAbcd5678')
-        : (billing === 'yearly' ? 'price_1QAbcd9012' : 'price_1QAbcd3456');
+        ? (billing === 'yearly' ? process.env.STRIPE_PRO_YEARLY || 'price_1QXXXXXX' : process.env.STRIPE_PRO_MONTHLY || 'price_1QXXXXXX')
+        : (billing === 'yearly' ? process.env.STRIPE_ESSENTIALS_YEARLY || 'price_1QXXXXXX' : process.env.STRIPE_ESSENTIALS_MONTHLY || 'price_1QXXXXXX');
 
     if (!priceId || !stripe) {
-      return NextResponse.json(
-        { error: 'Server configuration error' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 });
     }
 
     const sessionCheckout = await stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
-      customer_email: session.user.email,
+      customer_email: session.user.email ?? undefined,
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://autodispatchai.com'}/dashboard`,
       cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://autodispatchai.com'}/choose-plan`,
-      metadata: { user_id: session.user.id },
+      metadata: { user_id: session.user.id, plan, billing },
     });
 
     return NextResponse.json({ url: sessionCheckout.url });
 
-  } catch (error: any) {
-    console.error('Checkout API error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+  } catch (error) {
+    console.error('Checkout error:', error);
+    return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });
   }
 }
