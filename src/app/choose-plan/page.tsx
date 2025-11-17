@@ -214,15 +214,23 @@ function ChoosePlanContent() {
 
       const json = await res.json();
 
+      console.log('[choose-plan] API Response:', { ok: res.ok, hasUrl: !!json?.url, error: json?.error });
+
       if (!res.ok || !json?.url) {
-        alert(json?.error || 'Payment failed. Please try again.');
+        const errorMsg = json?.error || 'Payment failed. Please try again.';
+        console.error('[choose-plan] Checkout failed:', errorMsg);
+        alert(errorMsg);
         setLoading(false);
         return;
       }
 
+      console.log('[choose-plan] ✅ Redirecting to Stripe:', json.url);
+      
       localStorage.removeItem('autodispatch_selected_plan');
       localStorage.removeItem('autodispatch_billing');
       localStorage.removeItem('autodispatch_addons');
+      
+      // Force redirect to Stripe
       window.location.href = json.url;
     } catch (error) {
       console.error('Checkout error:', error);
