@@ -5,6 +5,7 @@ import { useMemo, useState, Suspense, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase';
+import { Loader2 } from 'lucide-react';
 
 type BillingCycle = 'monthly' | 'yearly';
 type PlanName = 'ESSENTIALS' | 'PRO' | 'ENTERPRISE';
@@ -94,6 +95,7 @@ function pct(discount: number): number {
 
 function ChoosePlanContent() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
+  const [loading, setLoading] = useState(false);
   
   // Check auth status
   useEffect(() => {
@@ -175,6 +177,10 @@ function ChoosePlanContent() {
   }, [billing, selectedPlan]);
 
   async function handleChoosePlan() {
+    if (loading) return;
+    
+    setLoading(true);
+    
     // Store plan selection in localStorage
     if (typeof window !== 'undefined') {
       localStorage.setItem('autodispatch_selected_plan', selectedPlan);
@@ -188,12 +194,67 @@ function ChoosePlanContent() {
 
     const planParam = selectedPlan.toLowerCase();
 
-    if (session) {
-      // User is logged in → go directly to billing
-      window.location.href = `/billing?plan=${planParam}`;
-    } else {
+    if (!session) {
       // User not logged in → go to signup
       window.location.href = `/signup?plan=${planParam}`;
+      return;
+    }
+
+    // User is logged in → directly create Stripe checkout session
+    if (selectedPlan === 'ENTERPRISE') {
+      window.location.href = 'https://calendly.com/autodispatchai/enterprise?utm_source=website&utm_medium=billing';
+      return;
+    }
+
+    try {
+      // Get selected add-ons
+      const chosenAddOnIds = Object.keys(selectedAddOns).filter(k => selectedAddOns[k]);
+
+      // Create Stripe checkout session directly
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          plan: selectedPlan,
+          billingCycle: billing,
+          addOns: chosenAddOnIds,
+        }),
+      });
+
+      const json = await res.json();
+      
+      if (!res.ok) {
+        const errorMsg = json?.error || 'Checkout failed';
+        console.error('[choose-plan] Checkout API error:', errorMsg);
+        setLoading(false);
+        // Fallback to billing page if checkout fails
+        window.location.href = `/billing?plan=${planParam}`;
+        return;
+      }
+
+      if (!json?.url) {
+        console.error('[choose-plan] No checkout URL in response:', json);
+        setLoading(false);
+        // Fallback to billing page
+        window.location.href = `/billing?plan=${planParam}`;
+        return;
+      }
+
+      // Clear localStorage after successful checkout redirect
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('autodispatch_selected_plan');
+        localStorage.removeItem('autodispatch_billing');
+        localStorage.removeItem('autodispatch_addons');
+      }
+
+      // Redirect directly to Stripe checkout
+      window.location.href = json.url;
+    } catch (error: any) {
+      console.error('[choose-plan] Checkout error:', error);
+      setLoading(false);
+      // Fallback to billing page on error
+      window.location.href = `/billing?plan=${planParam}`;
     }
   }
 
@@ -423,7 +484,12 @@ function ChoosePlanContent() {
                 disabled={loading || isEnterprise}
                 className="mt-5 h-11 w-full rounded-xl font-semibold tracking-tight bg-neutral-900 text-white hover:bg-neutral-800 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                {plan.name === 'ENTERPRISE' ? (
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Redirecting to checkout...
+                  </>
+                ) : plan.name === 'ENTERPRISE' ? (
                   'Talk to Our Team'
                 ) : (
                   `Choose ${plan.name} Plan`
