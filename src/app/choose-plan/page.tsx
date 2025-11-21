@@ -179,15 +179,37 @@ function ChoosePlanContent() {
     if (loading) return;
     setLoading(true);
 
-    // Check auth
+    // Check auth and refresh session to ensure cookies are up-to-date
     const supabase = createClient();
-    const { data: { session } } = await supabase.auth.getSession();
+    
+    // First, try to refresh the session to ensure cookies are synced
+    try {
+      const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError) {
+        console.warn('[choose-plan] Session refresh warning:', refreshError.message);
+      }
+    } catch (refreshErr) {
+      console.warn('[choose-plan] Session refresh failed:', refreshErr);
+    }
+    
+    // Now get the current session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError) {
+      console.error('[choose-plan] Session error:', sessionError);
+      setLoading(false);
+      alert('Session error. Please log in again.');
+      window.location.href = `/login?redirect=/choose-plan`;
+      return;
+    }
 
     if (!session) {
       setLoading(false);
       window.location.href = `/signup?plan=${selectedPlan.toLowerCase()}`;
       return;
     }
+    
+    console.log('[choose-plan] ✅ Session confirmed:', session.user.email);
 
     if (selectedPlan === 'ENTERPRISE') {
       window.location.href = 'https://calendly.com/autodispatchai/enterprise?utm_source=website&utm_medium=billing';

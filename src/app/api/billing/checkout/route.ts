@@ -43,6 +43,17 @@ export async function POST(request: Request) {
     let cookieStore;
     try {
       cookieStore = await cookies(); // Next.js 15: cookies() is async
+      
+      // Debug: Log available cookies (without sensitive values)
+      const cookieNames = cookieStore.getAll().map(c => c.name);
+      console.log('[billing/checkout] 📋 Available cookies:', cookieNames);
+      
+      // Check for Supabase auth cookies
+      const supabaseCookies = cookieNames.filter(name => 
+        name.includes('supabase') || name.includes('auth') || name.includes('sb-')
+      );
+      console.log('[billing/checkout] 🔐 Supabase-related cookies:', supabaseCookies);
+      
     } catch (cookieError: any) {
       console.error('[billing/checkout] ❌ Cookie error:', cookieError);
       return NextResponse.json({ 
@@ -57,7 +68,12 @@ export async function POST(request: Request) {
         supabaseAnonKey,
         {
           cookies: {
-            get: (name: string) => cookieStore.get(name)?.value,
+            get: (name: string) => {
+              const cookie = cookieStore.get(name);
+              const value = cookie?.value;
+              console.log(`[billing/checkout] 🍪 Reading cookie "${name}":`, value ? 'exists' : 'missing');
+              return value;
+            },
             set: () => {}, // No-ops for API routes
             remove: () => {},
           },
@@ -75,6 +91,14 @@ export async function POST(request: Request) {
       const sessionResult = await supabase.auth.getSession();
       session = sessionResult.data?.session;
       sessionError = sessionResult.error;
+      
+      console.log('[billing/checkout] 🔍 Session check result:', {
+        hasSession: !!session,
+        hasUser: !!session?.user,
+        userEmail: session?.user?.email,
+        error: sessionError?.message,
+      });
+      
     } catch (authError: any) {
       console.error('[billing/checkout] ❌ Auth getSession error:', authError);
       return NextResponse.json({ 
