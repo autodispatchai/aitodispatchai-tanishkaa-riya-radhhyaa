@@ -176,13 +176,25 @@ export async function POST(request: Request) {
       }, { status: 503 });
     }
 
-    // Generic error with details in development
-    const isDev = process.env.NODE_ENV === 'development';
+    // Generic error - show more details for debugging
+    const errorMessage = error?.message || 'Unknown error';
+    console.error('[billing/checkout] Full error object:', {
+      message: errorMessage,
+      type: error?.type,
+      code: error?.code,
+      statusCode: error?.statusCode,
+    });
+    
+    // Show specific error if it's safe to expose
+    if (errorMessage.includes('price') || errorMessage.includes('Price')) {
+      return NextResponse.json({ 
+        error: `Stripe configuration error: ${errorMessage}. Please check environment variables.` 
+      }, { status: 400 });
+    }
+    
     return NextResponse.json({ 
-      error: isDev 
-        ? `Error: ${error?.message || 'Unknown error'}` 
-        : 'Payment setup failed. Please try again or contact support.',
-      ...(isDev && { details: error?.stack }),
+      error: `Payment setup failed: ${errorMessage}. Check Vercel logs for details.`,
+      debug: process.env.NODE_ENV === 'development' ? error?.stack : undefined,
     }, { status: 500 });
   }
 }

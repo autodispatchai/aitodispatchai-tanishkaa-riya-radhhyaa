@@ -217,7 +217,11 @@ function ChoosePlanContent() {
           error: errorData?.error,
           fullResponse: errorData,
         });
-        alert(errorData?.error || `Error ${res.status}: Please try again.`);
+        
+        // Show detailed error to user
+        const errorMsg = errorData?.error || `Error ${res.status}: Please try again.`;
+        console.error('[choose-plan] Full error details:', errorData);
+        alert(`${errorMsg}\n\nCheck browser console (F12) for more details.`);
         setLoading(false);
         return;
       }
