@@ -68,8 +68,9 @@ export async function POST(req: NextRequest) {
       // Get subscription details from Stripe to get current_period_end
       let currentPeriodEnd: string | null = null;
       try {
-        const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId);
-        if (subscription.current_period_end) {
+        const subscriptionResponse = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+        const subscription = subscriptionResponse as any;
+        if (subscription?.current_period_end) {
           currentPeriodEnd = new Date(subscription.current_period_end * 1000).toISOString();
         }
       } catch (err) {
