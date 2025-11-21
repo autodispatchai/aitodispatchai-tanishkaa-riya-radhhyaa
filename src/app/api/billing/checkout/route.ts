@@ -120,34 +120,47 @@ export async function POST(request: Request) {
     // 9. Create Stripe checkout session
     console.log('[billing/checkout] 💳 Creating Stripe checkout session...');
     
-    const sessionCheckout = await stripe.checkout.sessions.create({
-      mode: 'subscription',
-      payment_method_types: ['card'],
-      customer_email: session.user.email,
-      line_items: lineItems,
-      success_url: `${BASE_URL}/dashboard`,
-      cancel_url: `${BASE_URL}/choose-plan`,
-      subscription_data: {
-        trial_period_days: 14,
+    let sessionCheckout;
+    try {
+      sessionCheckout = await stripe.checkout.sessions.create({
+        mode: 'subscription',
+        payment_method_types: ['card'],
+        customer_email: session.user.email,
+        line_items: lineItems,
+        success_url: `${BASE_URL}/dashboard`,
+        cancel_url: `${BASE_URL}/choose-plan`,
+        subscription_data: {
+          trial_period_days: 14,
+          metadata: {
+            user_id: session.user.id,
+            plan,
+            billing: billingCycle,
+            addOns: addedAddOns.join(','),
+          },
+        },
         metadata: {
           user_id: session.user.id,
           plan,
           billing: billingCycle,
           addOns: addedAddOns.join(','),
         },
-      },
-      metadata: {
-        user_id: session.user.id,
-        plan,
-        billing: billingCycle,
-        addOns: addedAddOns.join(','),
-      },
-    });
+      });
+    } catch (stripeError: any) {
+      console.error('[billing/checkout] ❌ Stripe API error:', stripeError);
+      console.error('[billing/checkout] Stripe error type:', stripeError?.type);
+      console.error('[billing/checkout] Stripe error message:', stripeError?.message);
+      console.error('[billing/checkout] Stripe error code:', stripeError?.code);
+      
+      // Re-throw Stripe errors so they're caught by outer catch block
+      throw stripeError;
+    }
 
-    if (!sessionCheckout.url) {
+    if (!sessionCheckout?.url) {
       console.error('[billing/checkout] ❌ No checkout URL from Stripe');
       console.error('[billing/checkout] Session object:', JSON.stringify(sessionCheckout, null, 2));
-      return NextResponse.json({ error: 'Failed to create checkout session. No URL returned.' }, { status: 500 });
+      return NextResponse.json({ 
+        error: 'Failed to create checkout session. Stripe did not return a URL. Check Stripe dashboard for details.' 
+      }, { status: 500 });
     }
 
     console.log('[billing/checkout] ✅ Success! URL:', sessionCheckout.url);
@@ -160,11 +173,14 @@ export async function POST(request: Request) {
     console.error('[billing/checkout] Error type:', error?.constructor?.name);
     console.error('[billing/checkout] Stack:', error?.stack);
     
-    // Stripe-specific errors
-    if (error?.type === 'StripeInvalidRequestError') {
-      console.error('[billing/checkout] Stripe error details:', JSON.stringify(error.raw, null, 2));
+    // Stripe-specific errors - catch all Stripe error types
+    if (error?.type && error.type.startsWith('Stripe')) {
+      console.error('[billing/checkout] Stripe error details:', JSON.stringify(error.raw || error, null, 2));
+      const stripeErrorMsg = error.message || 'Stripe API error occurred';
       return NextResponse.json({ 
-        error: `Stripe error: ${error.message}` 
+        error: `Stripe error: ${stripeErrorMsg}. Check Stripe dashboard and environment variables.`,
+        errorCode: error.code,
+        errorType: error.type,
       }, { status: 400 });
     }
 
@@ -176,33 +192,47 @@ export async function POST(request: Request) {
       }, { status: 503 });
     }
 
-    // Generic error - show more details for debugging
-    const errorMessage = error?.message || 'Unknown error';
+    // Extract error message - try multiple sources
+    const errorMessage = error?.message || 
+                        error?.error?.message || 
+                        error?.toString() || 
+                        'Unknown error occurred';
+    
     console.error('[billing/checkout] Full error object:', {
       message: errorMessage,
       type: error?.type,
       code: error?.code,
       statusCode: error?.statusCode,
+      name: error?.name,
+      stack: error?.stack,
     });
     
-    // Show specific error if it's safe to expose
-    if (errorMessage.includes('price') || errorMessage.includes('Price')) {
+    // Show specific error messages based on error content
+    if (errorMessage.toLowerCase().includes('price') || 
+        errorMessage.toLowerCase().includes('invalid price')) {
       return NextResponse.json({ 
-        error: `Stripe configuration error: ${errorMessage}. Please check environment variables.` 
+        error: `Stripe Price ID error: ${errorMessage}. Please check PRICE_* environment variables in Vercel.` 
       }, { status: 400 });
     }
     
+    if (errorMessage.toLowerCase().includes('api key') || 
+        errorMessage.toLowerCase().includes('authentication')) {
+      return NextResponse.json({ 
+        error: `Stripe authentication error: ${errorMessage}. Check STRIPE_SECRET_KEY in Vercel.` 
+      }, { status: 401 });
+    }
+    
     // Always show the actual error message (not generic)
-    const finalError = errorMessage.includes('Unknown error') 
-      ? 'Payment setup failed. Check Vercel logs for details.'
+    const finalError = errorMessage.includes('Unknown') 
+      ? `Payment setup failed. Error: ${error?.type || error?.name || 'Unknown'}. Check Vercel logs.`
       : `Payment setup failed: ${errorMessage}`;
     
     console.error('[billing/checkout] Returning error to client:', finalError);
     
     return NextResponse.json({ 
       error: finalError,
-      errorType: error?.type || error?.constructor?.name || 'Unknown',
-      debug: process.env.NODE_ENV === 'development' ? error?.stack : undefined,
+      errorType: error?.type || error?.name || error?.constructor?.name || 'Unknown',
+      errorCode: error?.code,
     }, { status: 500 });
   }
 }
