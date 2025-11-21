@@ -1,4 +1,4 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
@@ -25,8 +25,62 @@ export async function POST(request: Request) {
 
     // 2. Get session
     console.log('[billing/checkout] 🔐 Checking auth...');
-    const supabase = createRouteHandlerClient({ cookies });
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    // Check environment variables
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error('[billing/checkout] ❌ Missing Supabase env vars:', {
+        hasUrl: !!supabaseUrl,
+        hasKey: !!supabaseAnonKey,
+      });
+      return NextResponse.json({ 
+        error: 'Server configuration error. Missing Supabase credentials.' 
+      }, { status: 500 });
+    }
+    
+    let cookieStore;
+    try {
+      cookieStore = await cookies(); // Next.js 15: cookies() is async
+    } catch (cookieError: any) {
+      console.error('[billing/checkout] ❌ Cookie error:', cookieError);
+      return NextResponse.json({ 
+        error: `Cookie error: ${cookieError?.message || 'Failed to read cookies'}` 
+      }, { status: 500 });
+    }
+    
+    let supabase;
+    try {
+      supabase = createServerClient(
+        supabaseUrl,
+        supabaseAnonKey,
+        {
+          cookies: {
+            get: (name: string) => cookieStore.get(name)?.value,
+            set: () => {}, // No-ops for API routes
+            remove: () => {},
+          },
+        }
+      );
+    } catch (supabaseError: any) {
+      console.error('[billing/checkout] ❌ Supabase client error:', supabaseError);
+      return NextResponse.json({ 
+        error: `Supabase initialization error: ${supabaseError?.message || 'Unknown error'}` 
+      }, { status: 500 });
+    }
+    
+    let session, sessionError;
+    try {
+      const sessionResult = await supabase.auth.getSession();
+      session = sessionResult.data?.session;
+      sessionError = sessionResult.error;
+    } catch (authError: any) {
+      console.error('[billing/checkout] ❌ Auth getSession error:', authError);
+      return NextResponse.json({ 
+        error: `Authentication error: ${authError?.message || 'Failed to get session'}` 
+      }, { status: 500 });
+    }
 
     if (sessionError) {
       console.error('[billing/checkout] ❌ Session error:', sessionError.message);
