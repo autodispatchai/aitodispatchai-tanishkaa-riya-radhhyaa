@@ -21,7 +21,7 @@ export default function AboutUs() {
     {
       name: 'Deepak Sidhu',
       role: 'CEO & Founder',
-      bio: 'Serial entrepreneur. Built 3 logistics startups. Loves trucks & AI.',
+      bio: 'Deepak ensures the product solves real dispatch problems — bringing automation, operational efficiency, and profit clarity to carriers.',
       image: '/deepak-sidhu.png',
       linkedin: 'https://www.linkedin.com/in/deepaksidhu1',
       placeholder: 'DS',
@@ -30,7 +30,7 @@ export default function AboutUs() {
     {
       name: 'Danny Singh',
       role: 'Co-Founder & Head of Operations',
-      bio: 'Frontline carrier experience. Designs practical workflows.',
+      bio: 'Danny brings frontline carrier experience and designs workflows that are practical, reliable, and scale-ready.',
       image: '/danny-singh.png',
       email: 'danny@autodispatchai.com',
       placeholder: 'DS',
@@ -39,7 +39,7 @@ export default function AboutUs() {
     {
       name: 'Komal Sidhu',
       role: 'Co-Founder & Head of Tech/AI',
-      bio: 'Leads AI & Tech. Ensures automation reliability.',
+      bio: 'Komal leads our AI & Tech division — overseeing automation, platform reliability, and accuracy of AI outputs.',
       image: '/komal-sidhu.png',
       email: 'komal@autodispatchai.com',
       placeholder: 'KS',

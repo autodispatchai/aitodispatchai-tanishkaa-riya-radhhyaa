@@ -201,6 +201,7 @@ function ChoosePlanContent() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        cache: 'no-store',
         body: JSON.stringify({
           plan: selectedPlan,
           billingCycle: billing,
