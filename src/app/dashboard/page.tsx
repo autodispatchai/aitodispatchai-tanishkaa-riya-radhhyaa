@@ -1,20 +1,44 @@
 // src/app/dashboard/page.tsx
 import { createServerClient } from '@/lib/supabase/server';
 import { MapPin, Clock, TrendingUp, Briefcase, Users } from 'lucide-react';
+import { redirect } from 'next/navigation';
 
 export default async function Dashboard() {
   const supabase = createServerClient();
   const { data: { session } } = await supabase.auth.getSession();
 
   if (!session) {
-    return null;
+    redirect('/login');
   }
 
+  // Get company
   const { data: company } = await supabase
     .from('companies')
     .select('id, company_name')
-    .eq('user_id', session.user.id)
+    .eq('owner_id', session.user.id)
     .maybeSingle();
+
+  if (!company) {
+    redirect('/onboarding/create-company');
+  }
+
+  // Get subscription status
+  const { data: subscription } = await supabase
+    .from('subscriptions')
+    .select('status, trial_ends_at, plan')
+    .eq('company_id', company.id)
+    .maybeSingle();
+
+  // If no subscription, redirect to choose-plan
+  if (!subscription) {
+    redirect('/choose-plan');
+  }
+
+  // Check if trial is active
+  const isTrialing = subscription.status === 'trialing' || 
+    (subscription.trial_ends_at && new Date(subscription.trial_ends_at) > new Date());
+  
+  const isActive = subscription.status === 'active' && !isTrialing;
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -23,6 +47,29 @@ export default async function Dashboard() {
           Welcome back, {company?.company_name || 'User'}!
         </h1>
         <p className="text-neutral-600">Your AI dispatch is ready.</p>
+        
+        {/* Trial Status Banner */}
+        {isTrialing && (
+          <div className="mt-4 p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
+            <p className="text-sm font-medium text-indigo-900">
+              🎉 14-day free trial active
+            </p>
+            <p className="text-xs text-indigo-700 mt-1">
+              {subscription.trial_ends_at 
+                ? `Trial ends: ${new Date(subscription.trial_ends_at).toLocaleDateString()}`
+                : 'Enjoy full access during your trial period'}
+            </p>
+          </div>
+        )}
+
+        {/* Active Subscription Banner */}
+        {isActive && (
+          <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
+            <p className="text-sm font-medium text-emerald-900">
+              ✅ Active Subscription - {subscription.plan} Plan
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Overview Cards */}

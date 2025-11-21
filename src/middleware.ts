@@ -39,11 +39,11 @@ export async function middleware(req: NextRequest) {
         .from('subscriptions')
         .select('status')
         .eq('company_id', company.id)
-        .eq('status', 'active')
+        .in('status', ['active', 'trialing'])
         .maybeSingle();
 
       if (subscription) {
-        // User has active subscription → redirect to dashboard
+        // User has active or trialing subscription → redirect to dashboard
         if (url.pathname === '/' || url.pathname.startsWith('/signup') || url.pathname.startsWith('/login')) {
           return NextResponse.redirect(new URL('/dashboard', req.url));
         }
