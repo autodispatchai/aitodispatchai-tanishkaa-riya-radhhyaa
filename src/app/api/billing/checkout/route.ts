@@ -192,8 +192,16 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
     
+    // Always show the actual error message (not generic)
+    const finalError = errorMessage.includes('Unknown error') 
+      ? 'Payment setup failed. Check Vercel logs for details.'
+      : `Payment setup failed: ${errorMessage}`;
+    
+    console.error('[billing/checkout] Returning error to client:', finalError);
+    
     return NextResponse.json({ 
-      error: `Payment setup failed: ${errorMessage}. Check Vercel logs for details.`,
+      error: finalError,
+      errorType: error?.type || error?.constructor?.name || 'Unknown',
       debug: process.env.NODE_ENV === 'development' ? error?.stack : undefined,
     }, { status: 500 });
   }

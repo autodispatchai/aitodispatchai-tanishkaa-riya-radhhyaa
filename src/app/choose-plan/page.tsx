@@ -242,9 +242,14 @@ function ChoosePlanContent() {
         alert(data?.error || 'Payment setup error. Check console for details.');
         setLoading(false);
       }
-    } catch (err) {
-      console.error('[choose-plan] Fetch error:', err);
-      alert('Network error. Try again.');
+    } catch (err: any) {
+      console.error('[choose-plan] ❌ Fetch error:', err);
+      console.error('[choose-plan] Error type:', err?.constructor?.name);
+      console.error('[choose-plan] Error message:', err?.message);
+      console.error('[choose-plan] Full error:', err);
+      
+      const errorMsg = err?.message || 'Network error';
+      alert(`Error: ${errorMsg}\n\nCheck browser console (F12) for details.`);
       setLoading(false);
     }
   }
