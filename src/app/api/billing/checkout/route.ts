@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr';
+import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
@@ -23,12 +24,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Payment service not configured' }, { status: 500 });
     }
 
-    // 2. Get session
+    // 2. Get session - STEP 1: Try Authorization header first (explicit token)
     console.log('[billing/checkout] 🔐 Checking auth...');
     
     // Check environment variables
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const supabaseServiceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
     
     if (!supabaseUrl || !supabaseAnonKey) {
       console.error('[billing/checkout] ❌ Missing Supabase env vars:', {
@@ -39,84 +41,103 @@ export async function POST(request: Request) {
         error: 'Server configuration error. Missing Supabase credentials.' 
       }, { status: 500 });
     }
-    
-    let cookieStore;
-    try {
-      cookieStore = await cookies(); // Next.js 15: cookies() is async
+
+    let user = null;
+    let session = null;
+
+    // STEP 1: Extract and validate token from Authorization header
+    const authHeader = request.headers.get('authorization');
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      console.log('[billing/checkout] 🔑 Token found in Authorization header');
       
-      // Debug: Log available cookies (without sensitive values)
-      const cookieNames = cookieStore.getAll().map(c => c.name);
-      console.log('[billing/checkout] 📋 Available cookies:', cookieNames);
-      
-      // Check for Supabase auth cookies
-      const supabaseCookies = cookieNames.filter(name => 
-        name.includes('supabase') || name.includes('auth') || name.includes('sb-')
-      );
-      console.log('[billing/checkout] 🔐 Supabase-related cookies:', supabaseCookies);
-      
-    } catch (cookieError: any) {
-      console.error('[billing/checkout] ❌ Cookie error:', cookieError);
-      return NextResponse.json({ 
-        error: `Cookie error: ${cookieError?.message || 'Failed to read cookies'}` 
-      }, { status: 500 });
-    }
-    
-    let supabase;
-    try {
-      supabase = createServerClient(
-        supabaseUrl,
-        supabaseAnonKey,
-        {
-          cookies: {
-            get: (name: string) => {
-              const cookie = cookieStore.get(name);
-              const value = cookie?.value;
-              console.log(`[billing/checkout] 🍪 Reading cookie "${name}":`, value ? 'exists' : 'missing');
-              return value;
+      try {
+        // Use service role to verify token (backend verification)
+        const supabaseAdmin = createClient(
+          supabaseUrl,
+          supabaseServiceRole || supabaseAnonKey, // Fallback to anon if service role not set
+          {
+            auth: {
+              autoRefreshToken: false,
+              persistSession: false,
             },
-            set: () => {}, // No-ops for API routes
-            remove: () => {},
-          },
+          }
+        );
+        
+        const { data: { user: verifiedUser }, error: authError } = await supabaseAdmin.auth.getUser(token);
+        
+        if (authError || !verifiedUser) {
+          console.error('[billing/checkout] ❌ Token verification failed:', authError?.message);
+          return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
         }
-      );
-    } catch (supabaseError: any) {
-      console.error('[billing/checkout] ❌ Supabase client error:', supabaseError);
-      return NextResponse.json({ 
-        error: `Supabase initialization error: ${supabaseError?.message || 'Unknown error'}` 
-      }, { status: 500 });
-    }
-    
-    let session, sessionError;
-    try {
-      const sessionResult = await supabase.auth.getSession();
-      session = sessionResult.data?.session;
-      sessionError = sessionResult.error;
+        
+        user = verifiedUser;
+        console.log('[billing/checkout] ✅ Token verified, user:', user.email);
+      } catch (tokenError: any) {
+        console.error('[billing/checkout] ❌ Token verification error:', tokenError);
+        return NextResponse.json({ error: 'Token verification failed' }, { status: 401 });
+      }
+    } else {
+      // STEP 2: Fallback to cookie-based auth
+      console.log('[billing/checkout] 🔑 No Authorization header, trying cookies...');
       
-      console.log('[billing/checkout] 🔍 Session check result:', {
-        hasSession: !!session,
-        hasUser: !!session?.user,
-        userEmail: session?.user?.email,
-        error: sessionError?.message,
-      });
+      let cookieStore;
+      try {
+        cookieStore = await cookies();
+        const cookieNames = cookieStore.getAll().map(c => c.name);
+        console.log('[billing/checkout] 📋 Available cookies:', cookieNames);
+      } catch (cookieError: any) {
+        console.error('[billing/checkout] ❌ Cookie error:', cookieError);
+        return NextResponse.json({ 
+          error: `Cookie error: ${cookieError?.message || 'Failed to read cookies'}` 
+        }, { status: 500 });
+      }
       
-    } catch (authError: any) {
-      console.error('[billing/checkout] ❌ Auth getSession error:', authError);
-      return NextResponse.json({ 
-        error: `Authentication error: ${authError?.message || 'Failed to get session'}` 
-      }, { status: 500 });
+      let supabase;
+      try {
+        supabase = createServerClient(
+          supabaseUrl,
+          supabaseAnonKey,
+          {
+            cookies: {
+              get: (name: string) => cookieStore.get(name)?.value,
+              set: () => {},
+              remove: () => {},
+            },
+          }
+        );
+      } catch (supabaseError: any) {
+        console.error('[billing/checkout] ❌ Supabase client error:', supabaseError);
+        return NextResponse.json({ 
+          error: `Supabase initialization error: ${supabaseError?.message || 'Unknown error'}` 
+        }, { status: 500 });
+      }
+      
+      try {
+        const sessionResult = await supabase.auth.getSession();
+        session = sessionResult.data?.session;
+        
+        if (!session?.user?.email) {
+          console.error('[billing/checkout] ❌ No session from cookies');
+          return NextResponse.json({ error: 'Not authenticated. Please log in again.' }, { status: 401 });
+        }
+        
+        user = session.user;
+        console.log('[billing/checkout] ✅ Authenticated via cookies:', user.email);
+      } catch (authError: any) {
+        console.error('[billing/checkout] ❌ Auth getSession error:', authError);
+        return NextResponse.json({ 
+          error: `Authentication error: ${authError?.message || 'Failed to get session'}` 
+        }, { status: 500 });
+      }
     }
 
-    if (sessionError) {
-      console.error('[billing/checkout] ❌ Session error:', sessionError.message);
-      return NextResponse.json({ error: 'Authentication error' }, { status: 401 });
-    }
-
-    if (!session?.user?.email) {
-      console.error('[billing/checkout] ❌ No session or email');
+    if (!user?.email) {
+      console.error('[billing/checkout] ❌ No user found');
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    console.log('[billing/checkout] ✅ Authenticated:', session.user.email);
+    console.log('[billing/checkout] ✅ Authenticated:', user.email);
 
     // 3. Parse request body
     let body;
@@ -203,21 +224,21 @@ export async function POST(request: Request) {
       sessionCheckout = await stripe.checkout.sessions.create({
         mode: 'subscription',
         payment_method_types: ['card'],
-        customer_email: session.user.email,
+        customer_email: user.email,
         line_items: lineItems,
         success_url: `${BASE_URL}/dashboard`,
         cancel_url: `${BASE_URL}/choose-plan`,
         subscription_data: {
           trial_period_days: 14,
           metadata: {
-            user_id: session.user.id,
+            user_id: user.id,
             plan,
             billing: billingCycle,
             addOns: addedAddOns.join(','),
           },
         },
         metadata: {
-          user_id: session.user.id,
+          user_id: user.id,
           plan,
           billing: billingCycle,
           addOns: addedAddOns.join(','),
