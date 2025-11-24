@@ -1,4 +1,6 @@
 // src/app/dashboard/settings/page.tsx
+export const dynamic = 'force-dynamic';
+
 export default function SettingsPage() {
   return (
     <div className="max-w-4xl mx-auto">

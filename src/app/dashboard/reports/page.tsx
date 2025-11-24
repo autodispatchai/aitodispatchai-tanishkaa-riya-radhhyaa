@@ -1,4 +1,6 @@
 // src/app/dashboard/reports/page.tsx
+export const dynamic = 'force-dynamic';
+
 export default function ReportsPage() {
   return (
     <div className="max-w-7xl mx-auto">

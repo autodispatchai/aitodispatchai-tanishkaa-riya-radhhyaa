@@ -1,4 +1,6 @@
 // src/app/dashboard/jobs/page.tsx
+export const dynamic = 'force-dynamic';
+
 export default function JobsPage() {
   return (
     <div className="max-w-7xl mx-auto">
