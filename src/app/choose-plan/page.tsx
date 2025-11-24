@@ -174,42 +174,10 @@ function ChoosePlanContent() {
     }
   }, [billing, selectedPlan]);
 
-  // SIMPLIFIED handleChoosePlan — CLEAN & WORKING
+  // FINAL FIX — Get token explicitly and send in Authorization header
   async function handleChoosePlan() {
     if (loading) return;
     setLoading(true);
-
-    // Check auth and refresh session to ensure cookies are up-to-date
-    const supabase = createClient();
-    
-    // First, try to refresh the session to ensure cookies are synced
-    try {
-      const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
-      if (refreshError) {
-        console.warn('[choose-plan] Session refresh warning:', refreshError.message);
-      }
-    } catch (refreshErr) {
-      console.warn('[choose-plan] Session refresh failed:', refreshErr);
-    }
-    
-    // Now get the current session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
-    if (sessionError) {
-      console.error('[choose-plan] Session error:', sessionError);
-      setLoading(false);
-      alert('Session error. Please log in again.');
-      window.location.href = `/login?redirect=/choose-plan`;
-      return;
-    }
-
-    if (!session) {
-      setLoading(false);
-      window.location.href = `/signup?plan=${selectedPlan.toLowerCase()}`;
-      return;
-    }
-    
-    console.log('[choose-plan] ✅ Session confirmed:', session.user.email);
 
     if (selectedPlan === 'ENTERPRISE') {
       window.location.href = 'https://calendly.com/autodispatchai/enterprise?utm_source=website&utm_medium=billing';
@@ -217,61 +185,63 @@ function ChoosePlanContent() {
     }
 
     try {
+      // STEP 1: Get FRESH session token (critical after OAuth)
+      const supabase = createClient();
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session?.access_token) {
+        console.error('[choose-plan] ❌ No session or token:', sessionError);
+        alert('Session expired. Please sign in again.');
+        setLoading(false);
+        window.location.href = '/login?redirect=/choose-plan';
+        return;
+      }
+
+      console.log('[choose-plan] ✅ Session token obtained:', session.user.email);
+
+      // STEP 2: Prepare request
       const chosenAddOnIds = Object.keys(selectedAddOns).filter(k => selectedAddOns[k]);
 
       const res = await fetch('/api/billing/checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`, // MUST BE HERE - explicit token
+        },
+        credentials: 'include',     // Also send cookies as backup
         cache: 'no-store',
         body: JSON.stringify({
           plan: selectedPlan,
           billingCycle: billing,
           addOns: chosenAddOnIds,
+          userId: session.user.id, // Explicitly send userId
         }),
       });
 
-      // Check response status first
+      const json = await res.json();
+      
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
-        console.error('[choose-plan] ❌ API Error:', {
-          status: res.status,
-          error: errorData?.error,
-          fullResponse: errorData,
-        });
+        console.error('[choose-plan] ❌ API Error:', json);
+        alert(json?.error || 'Payment failed');
         
-        // Show detailed error to user
-        const errorMsg = errorData?.error || `Error ${res.status}: Please try again.`;
-        console.error('[choose-plan] Full error details:', errorData);
-        alert(`${errorMsg}\n\nCheck browser console (F12) for more details.`);
+        // If auth failed, redirect to login
+        if (res.status === 401) {
+          window.location.href = '/login?redirect=/choose-plan';
+        }
         setLoading(false);
         return;
       }
 
-      const data = await res.json();
-      console.log('[choose-plan] ✅ Full API Response:', data);
-
-      if (data.url) {
-        console.log('[choose-plan] ✅ Valid Stripe URL received:', data.url);
-        // Clear loading state before redirect
-        setLoading(false);
-        // Small delay to ensure state updates
-        setTimeout(() => {
-          window.location.href = data.url;
-        }, 100);
+      if (json?.url) {
+        console.log('[choose-plan] ✅ Stripe URL received, redirecting...');
+        window.location.href = json.url;
       } else {
-        console.error('[choose-plan] ❌ No URL in response:', data);
-        alert(data?.error || 'Payment setup error. Check console for details.');
+        alert('Payment failed — no URL received');
         setLoading(false);
       }
-    } catch (err: any) {
-      console.error('[choose-plan] ❌ Fetch error:', err);
-      console.error('[choose-plan] Error type:', err?.constructor?.name);
-      console.error('[choose-plan] Error message:', err?.message);
-      console.error('[choose-plan] Full error:', err);
-      
-      const errorMsg = err?.message || 'Network error';
-      alert(`Error: ${errorMsg}\n\nCheck browser console (F12) for details.`);
+    } catch (error) {
+      console.error('[choose-plan] ❌ Checkout error:', error);
+      alert('Network error. Try again.');
       setLoading(false);
     }
   }
