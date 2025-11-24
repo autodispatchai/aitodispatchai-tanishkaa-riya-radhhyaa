@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to generate upload URL', details: signedUrlError?.message }, { status: 500 });
     }
     return NextResponse.json({
-      uploadUrl: signedUrlData.signedURL || signedUrlData.signedUrl || signedUrlData.url,
+      uploadUrl: signedUrlData.signedUrl,
       filePath,
       expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
       fileName: sanitizedFileName,
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to generate upload URL', details: signedUrlError?.message }, { status: 500 });
     }
     return NextResponse.json({
-      uploadUrl: signedUrlData.signedURL || signedUrlData.signedUrl || signedUrlData.url,
+      uploadUrl: signedUrlData.signedUrl,
       filePath,
       expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
       fileName: sanitizedFileName,
@@ -85,3 +85,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Internal server error', details: error?.message }, { status: 500 });
   }
 }
+
