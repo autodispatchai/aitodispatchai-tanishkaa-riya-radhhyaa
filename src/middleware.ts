@@ -1,74 +1,46 @@
-// middleware.ts (ROOT FOLDER MEIN)
-import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import { NextResponse, type NextRequest } from 'next/server';
 
-export async function middleware(req: NextRequest) {
-  const res = NextResponse.next();
-  const supabase = createMiddlewareClient({ req, res });
+// Define protected routes
+const isProtectedRoute = createRouteMatcher([
+  '/dashboard(.*)',
+  '/onboarding(.*)',
+  '/choose-plan(.*)',
+]);
 
-  const { data: { session } } = await supabase.auth.getSession();
+// Define public routes that should redirect if authenticated
+const isPublicRoute = createRouteMatcher([
+  '/login(.*)',
+  '/signup(.*)',
+  '/',
+]);
 
+export default clerkMiddleware(async (auth, req: NextRequest) => {
+  const { userId } = await auth();
   const url = req.nextUrl;
 
-  // PROTECTED ROUTES (only dashboard requires auth)
-  if (url.pathname.startsWith('/dashboard')) {
-    if (!session) {
-      return NextResponse.redirect(new URL('/login', req.url));
-    }
+  // Protect routes that require authentication
+  if (isProtectedRoute(req) && !userId) {
+    const signInUrl = new URL('/login', req.url);
+    signInUrl.searchParams.set('redirect_url', url.pathname);
+    return NextResponse.redirect(signInUrl);
   }
 
-  // AFTER LOGIN → RESUME FLOW
-  if (session) {
-    // Skip redirect if already on correct page
-    if (url.pathname.startsWith('/dashboard') || 
-        url.pathname.startsWith('/onboarding/create-company') ||
-        url.pathname.startsWith('/choose-plan') ||
-        url.pathname.startsWith('/api')) {
-      return res;
-    }
-
-    const { data: company } = await supabase
-      .from('companies')
-      .select('id')
-      .eq('owner_id', session.user.id)
-      .maybeSingle();
-
-    if (company) {
-      // Check subscription status from subscriptions table
-      const { data: subscription } = await supabase
-        .from('subscriptions')
-        .select('status')
-        .eq('company_id', company.id)
-        .in('status', ['active', 'trialing'])
-        .maybeSingle();
-
-      if (subscription) {
-        // User has active or trialing subscription → redirect to dashboard
-        if (url.pathname === '/' || url.pathname.startsWith('/signup') || url.pathname.startsWith('/login')) {
-          return NextResponse.redirect(new URL('/dashboard', req.url));
-        }
-      } else {
-        // Company exists but no active subscription → redirect to choose-plan
-        if (url.pathname === '/' || url.pathname.startsWith('/signup') || url.pathname.startsWith('/login')) {
-          return NextResponse.redirect(new URL('/choose-plan', req.url));
-        }
-      }
-    } else {
-      // No company → redirect to onboarding
-      if (url.pathname === '/' || url.pathname.startsWith('/signup') || url.pathname.startsWith('/login')) {
-        return NextResponse.redirect(new URL('/onboarding/create-company', req.url));
-      }
-    }
+  // Redirect authenticated users away from public auth pages
+  if (isPublicRoute(req) && userId) {
+    // TODO: Check company and subscription status
+    // For now, redirect to dashboard
+    return NextResponse.redirect(new URL('/dashboard', req.url));
   }
 
-  // Redirect /billing to /choose-plan (billing page removed)
-  if (url.pathname.startsWith('/billing')) {
-    return NextResponse.redirect(new URL('/choose-plan', req.url));
-  }
-
-  return res;
-}
+  return NextResponse.next();
+});
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  matcher: [
+    // Skip Next.js internals and all static files, unless found in search params
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Always run for API routes
+    '/(api|trpc)(.*)',
+  ],
 };

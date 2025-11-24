@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Inter, Roboto_Mono } from 'next/font/google';
+import { ClerkProvider, SignInButton, SignUpButton, SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
 import './globals.css';
 import CookieConsent from '@/components/CookieConsent';
 import Footer from '@/components/Footer';
@@ -60,32 +61,51 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${inter.variable} ${mono.variable}`}>
-      <head>
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              '@context': 'https://schema.org',
-              '@type': 'Organization',
-              name: 'AutoDispatchAI',
-              url: 'https://autodispatchai.vercel.app',
-              logo: 'https://autodispatchai.vercel.app/logo.png',
-              founder: [
-                { '@type': 'Person', name: 'Deepak Sidhu', jobTitle: 'CEO & Founder' },
-                { '@type': 'Person', name: 'Danny Singh', jobTitle: 'Co-Founder & Operations' },
-                { '@type': 'Person', name: 'Komal Sidhu', jobTitle: 'Co-Founder & Tech/AI' },
-              ],
-            }),
-          }}
-        />
-      </head>
-      <body className="font-sans antialiased bg-white text-neutral-900">
-        {children}
-        <Footer />
-        <CookieConsent />
-      </body>
-    </html>
+    <ClerkProvider>
+      <html lang="en" className={`${inter.variable} ${mono.variable}`}>
+        <head>
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify({
+                '@context': 'https://schema.org',
+                '@type': 'Organization',
+                name: 'AutoDispatchAI',
+                url: 'https://autodispatchai.vercel.app',
+                logo: 'https://autodispatchai.vercel.app/logo.png',
+                founder: [
+                  { '@type': 'Person', name: 'Deepak Sidhu', jobTitle: 'CEO & Founder' },
+                  { '@type': 'Person', name: 'Danny Singh', jobTitle: 'Co-Founder & Operations' },
+                  { '@type': 'Person', name: 'Komal Sidhu', jobTitle: 'Co-Founder & Tech/AI' },
+                ],
+              }),
+            }}
+          />
+        </head>
+        <body className="font-sans antialiased bg-white text-neutral-900">
+          <header className="flex justify-end items-center p-4 gap-4 h-16 border-b border-neutral-200">
+            <SignedOut>
+              <SignInButton mode="modal">
+                <button className="text-neutral-700 hover:text-neutral-900 font-medium text-sm px-4 py-2">
+                  Sign In
+                </button>
+              </SignInButton>
+              <SignUpButton mode="modal">
+                <button className="bg-[#6c47ff] text-white rounded-full font-medium text-sm h-10 px-5 cursor-pointer hover:bg-[#5a3ae6] transition-colors">
+                  Sign Up
+                </button>
+              </SignUpButton>
+            </SignedOut>
+            <SignedIn>
+              <UserButton afterSignOutUrl="/" />
+            </SignedIn>
+          </header>
+          {children}
+          <Footer />
+          <CookieConsent />
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }
 // ...existing code...
