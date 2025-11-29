@@ -3,7 +3,7 @@ import { createServerClient } from '@/lib/supabase/server';
 import { Check } from 'lucide-react';
 
 export default async function BillingPage() {
-  const supabase = createServerClient();
+  const supabase = await createServerClient();
   const { data: { session } } = await supabase.auth.getSession();
 
   if (!session) {

@@ -264,9 +264,9 @@ export async function POST(req: NextRequest) {
     // Handle invoice.paid event (for trial subscriptions)
     if (event.type === 'invoice.paid') {
       const invoice = event.data.object as Stripe.Invoice;
-      const subscriptionId = typeof invoice.subscription === 'string' 
-        ? invoice.subscription 
-        : invoice.subscription?.id;
+      const subscriptionId = typeof (invoice as any).subscription === 'string' 
+        ? (invoice as any).subscription 
+        : (invoice as any).subscription?.id;
 
       if (subscriptionId) {
         console.log('[webhook] Invoice paid for subscription:', subscriptionId);
