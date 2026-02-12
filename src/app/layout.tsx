@@ -3,6 +3,7 @@ import { Inter, Roboto_Mono } from 'next/font/google';
 import './globals.css';
 import CookieConsent from '@/components/CookieConsent';
 import Footer from '@/components/Footer';
+import { Analytics } from '@vercel/analytics/next';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 const mono = Roboto_Mono({ subsets: ['latin'], variable: '--font-mono' });
@@ -84,6 +85,7 @@ export default function RootLayout({
         {children}
         <Footer />
         <CookieConsent />
+        <Analytics />
       </body>
     </html>
   );
